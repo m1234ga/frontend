@@ -1,28 +1,22 @@
 'use client'; 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Send, Smile, MoreVertical, Image, Mic, Video, Square, RotateCcw, X, Play, Pause, MapPin, Clock, Trash2, Edit3, Heart, FileText, Star, Check, XCircle, UserPlus, User, Search, Info } from 'lucide-react';
+import { X, Heart, FileText, Star, User, Search } from 'lucide-react';
 import { EmptyArea } from '@/components/chat/EmptyArea';
-import { Message } from '@/components/chat/Message';
+import MessageList from './MessageList';
+import RecordingControls from './RecordingControls';
+import TempMessages from './TempMessages';
+import { TempMessage } from '@/types/chat';
+import { ChatMessage } from '../../../../Shared/Models';
 import { ForwardModal } from '@/components/chat/ForwardModal';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import Chat from './ChatRouters';
+import ChatCloseModal from '@/components/common/ChatCloseModal';
+import ChatHeader from './ChatHeader';
+import MessageInput from './MessageInput';
 
-interface TempMessage {
-  id: string;
-  type: 'text' | 'image' | 'image_caption' | 'location' | 'audio';
-  content: string;
-  imageData?: string;
-  location?: {
-    lat: number;
-    lng: number;
-    address: string;
-  };
-  audioBlob?: Blob;
-  timestamp: Date;
-  isDraft: boolean;
-}
+// TempMessage type is imported from '@/types/chat'
 
 interface ChatAreaProps {
   selectedConversation: ChatModel | null;
@@ -40,17 +34,17 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   conversations = []
 }) => {
   const [newMessage, setNewMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  // typing indicator tracked via typingUsers set
+  // We track typing users in `typingUsers`. Keep a noop setter to satisfy existing call sites.
+  const setIsTyping = (_val: boolean) => { void _val; /* noop, typingUsers set is authoritative */ };
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [isOnline, setIsOnline] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'paused' | 'reviewing'>('idle');
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordedAudio, setRecordedAudio] = useState<Blob | null>(null);
   const [audioPreview, setAudioPreview] = useState<HTMLAudioElement | null>(null);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-  const [recordingChunks, setRecordingChunks] = useState<Blob[]>([]);
   const [recordingStream, setRecordingStream] = useState<MediaStream | null>(null);
   const [tempMessages, setTempMessages] = useState<TempMessage[]>([]);
   const [showTempMessages, setShowTempMessages] = useState(false);
@@ -80,13 +74,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   
-  const { joinConversation, leaveConversation, onNewMessage: onSocketNewMessage, onUserTyping, onChatPresence, emitTyping, socket } = useSocket();
+  const { joinConversation, leaveConversation, onNewMessage: onSocketNewMessage, onUserTyping, onChatPresence, socket } = useSocket();
   const { user, token } = useAuth();
   const chatRouter = useMemo(() => Chat(token || ""), [token]);
 
@@ -97,10 +90,21 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   }, [selectedConversation]);
 
-  // Helper function to format time
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  // Helper function to format time. Accepts a Date, ISO string, or objects with `timestamp`.
+  const formatTime = (input?: string | Date | { timestamp?: string | Date }) => {
+    try {
+      let dateVal: string | Date | undefined = undefined;
+      if (!input) return '';
+      if (typeof input === 'object' && 'timestamp' in input) {
+        dateVal = (input as { timestamp?: string | Date }).timestamp;
+      } else {
+        dateVal = input as string | Date;
+      }
+  const date = new Date(String(dateVal));
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
   };
 
   // Handle status button click
@@ -141,7 +145,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       try {
         // Try to fetch tags from API; fallback to default list if fails
         const tags = await chatRouter.GetTags();
-        const formatted = (tags || []).map((t: any) => ({ id: t.tagId?.toString?.() || t.id?.toString?.() || t.tagName || t.name, name: t.tagName || t.name }));
+  type TagApiItem = { tagId?: number | string; id?: number | string; tagName?: string; name?: string };
+  const formatted = (tags || []).map((t: TagApiItem) => ({ id: t.tagId?.toString?.() || t.id?.toString?.() || t.tagName || t.name || '', name: t.tagName || t.name || '' }));
         if (formatted.length === 0) {
           setAvailableCloseTags([
             { id: '1', name: 'Issue Resolved' },
@@ -154,7 +159,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         } else {
           setAvailableCloseTags(formatted);
         }
-      } catch (err) {
+  } catch {
         setAvailableCloseTags([
           { id: '1', name: 'Issue Resolved' },
           { id: '2', name: 'Customer Satisfied' },
@@ -263,8 +268,47 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       return () => {
         leaveConversation(selectedConversation.id);
       };
+
     }
+
   }, [selectedConversation, user, joinConversation, leaveConversation, onSocketNewMessage, onUserTyping, onChatPresence, onNewMessage]);
+
+  // Image/video upload handlers (create temp messages)
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && selectedConversation) {
+      try {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const base64Data = e.target?.result as string;
+          const base64Content = base64Data.split(',')[1];
+
+          addTempMessage('image', '[Image]', { imageData: base64Content });
+        };
+        reader.readAsDataURL(file);
+      } catch (error) {
+        console.error('Error processing image:', error);
+      }
+    }
+  };
+
+  const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && selectedConversation) {
+      try {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const base64Data = e.target?.result as string;
+          const base64Content = base64Data.split(',')[1];
+
+          addTempMessage('video', '[Video]', { videoData: base64Content });
+        };
+        reader.readAsDataURL(file);
+      } catch (error) {
+        console.error('Error processing video:', error);
+      }
+    }
+  };
 
   // Fetch message templates
   const fetchTemplates = useCallback(async () => {
@@ -310,95 +354,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewMessage(e.target.value);
-    
-    if (selectedConversation) {
-      // Clear existing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
 
-      if (e.target.value && !isTyping) {
-        setIsTyping(true);
-        emitTyping(selectedConversation.id, true);
-      } else if (!e.target.value && isTyping) {
-        setIsTyping(false);
-        emitTyping(selectedConversation.id, false);
-      }
-
-      // Set timeout to stop typing indicator
-      typingTimeoutRef.current = setTimeout(() => {
-        if (isTyping) {
-          setIsTyping(false);
-          emitTyping(selectedConversation.id, false);
-        }
-      }, 1000);
-    }
-  };
-
-  // Media handling functions
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && selectedConversation) {
-      try {
-        // Convert file to base64
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const base64Data = e.target?.result as string;
-          const base64Content = base64Data.split(',')[1]; // Remove data:image/jpeg;base64, prefix
-          
-          // Send image directly (no temp message step)
-          const imageMessage: ChatMessage = {
-            id: Date.now().toString(),
-            chatId: selectedConversation.id,
-            message: newMessage || '[Image]',
-            timestamp: new Date(),
-            ContactId: selectedConversation.contactId,
-            messageType: 'image',
-            isEdit: false,
-            isRead: false,
-            isDelivered: false,
-            isFromMe: true,
-            phone: selectedConversation.phone
-          };
-          
-          if (socket) {
-            socket.emit('send_image', {
-              message: imageMessage,
-              imageData: base64Content,
-              filename: `image_${Date.now()}.jpg`
-            });
-          }
-          
-          setNewMessage('');
-        };
-        reader.readAsDataURL(file);
-      } catch (error) {
-        console.error('Error processing image:', error);
-      }
-    }
-  };
-
-  const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && selectedConversation) {
-      try {
-        // Send video message directly (no temp message step)
-        onSendMessage(newMessage || '[Video]');
-        setNewMessage('');
-      } catch (error) {
-        console.error('Error sending video:', error);
-      }
-    }
-  };
 
   // Helper function to get supported audio MIME type
   const getSupportedMimeType = () => {
@@ -422,8 +379,56 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     return '';
   };
 
+  const cleanupAudioVisualization = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+    }
+    audioContextRef.current = null;
+    analyserRef.current = null;
+  }, []);
+
+  const animateVisualization = useCallback(() => {
+    if (!analyserRef.current) return;
+
+    const bufferLength = analyserRef.current.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const draw = () => {
+      if (recordingState === 'recording') {
+        analyserRef.current!.getByteFrequencyData(dataArray);
+        // You can use dataArray for waveform visualization
+        animationFrameRef.current = requestAnimationFrame(draw);
+      }
+    };
+
+    draw();
+  }, [recordingState]);
+
+  const setupAudioVisualization = useCallback((stream: MediaStream) => {
+    try {
+      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+
+      // Start visualization animation
+      animateVisualization();
+    } catch (error) {
+      console.error('Error setting up audio visualization:', error);
+    }
+  }, [animateVisualization]);
+
   // Enhanced recording functions
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
+    console.log('startRecording: attempting to getUserMedia');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
@@ -447,7 +452,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         const actualMimeType = recorder.mimeType || mimeType || 'audio/webm';
         const audioBlob = new Blob(chunks, { type: actualMimeType });
         setRecordedAudio(audioBlob);
-        setRecordingChunks(chunks);
         setRecordingState('reviewing');
         
         // Create audio preview
@@ -455,39 +459,40 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         const audio = new Audio(audioUrl);
         setAudioPreview(audio);
         
+        console.log('recorder.onstop: generated audio blob, entering reviewing state');
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
       };
 
       recorder.onpause = () => {
+        console.log('recorder.onpause');
         setRecordingState('paused');
       };
 
       recorder.onresume = () => {
+        console.log('recorder.onresume');
         setRecordingState('recording');
       };
 
       recorder.start(100); // Collect data every 100ms
-      setMediaRecorder(recorder);
-      setRecordingStream(stream);
-      setRecordingState('recording');
-      setIsRecording(true);
-      setRecordingDuration(0);
-      setRecordingChunks([]);
+  setMediaRecorder(recorder);
+  setRecordingStream(stream);
+  setRecordingState('recording');
+  setRecordingDuration(0);
       
       // Start recording timer
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
 
-      // Setup audio visualization
-      setupAudioVisualization(stream);
+  // Setup audio visualization
+  setupAudioVisualization(stream);
       
     } catch (error) {
       console.error('Error accessing microphone:', error);
       alert('Could not access microphone. Please check permissions.');
     }
-  };
+  }, [setupAudioVisualization]);
 
   const pauseRecording = () => {
     if (mediaRecorder && recordingState === 'recording') {
@@ -509,16 +514,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const stopRecording = () => {
     if (mediaRecorder && (recordingState === 'recording' || recordingState === 'paused')) {
+      console.log('stopRecording: stopping mediaRecorder (will wait for onstop to set reviewing)');
+      // Trigger the recorder to finish — onstop handler will set the reviewing state and create the blob
       mediaRecorder.stop();
-      setIsRecording(false);
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
+      // Do not force-recordingState to 'idle' here; wait for recorder.onstop which sets 'reviewing'
+      // Keep visualization cleanup in case onstop is not called promptly
       cleanupAudioVisualization();
     }
   };
 
-  const cancelRecording = () => {
+  const cancelRecording = useCallback(() => {
     if (mediaRecorder) {
       mediaRecorder.stop();
     }
@@ -541,17 +549,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
     
     // Reset all recording state
-    setIsRecording(false);
     setRecordingState('idle');
     setRecordingDuration(0);
     setRecordedAudio(null);
     setAudioPreview(null);
     setIsPlayingPreview(false);
-    setRecordingChunks([]);
     setRecordingStream(null);
     setMediaRecorder(null);
     cleanupAudioVisualization();
-  };
+  }, [mediaRecorder, recordingStream, audioPreview, recordedAudio, socket, cleanupAudioVisualization]);
 
   const recordAgain = () => {
     cancelRecording();
@@ -586,53 +592,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         setIsPlayingPreview(true);
       }
     }
-  };
-
-  const setupAudioVisualization = (stream: MediaStream) => {
-    try {
-      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      const analyser = audioContext.createAnalyser();
-      const source = audioContext.createMediaStreamSource(stream);
-      
-      analyser.fftSize = 256;
-      source.connect(analyser);
-      
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-      
-      // Start visualization animation
-      animateVisualization();
-    } catch (error) {
-      console.error('Error setting up audio visualization:', error);
-    }
-  };
-
-  const animateVisualization = () => {
-    if (!analyserRef.current) return;
-    
-    const bufferLength = analyserRef.current.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    
-    const draw = () => {
-      if (recordingState === 'recording') {
-        analyserRef.current!.getByteFrequencyData(dataArray);
-        // You can use dataArray for waveform visualization
-        animationFrameRef.current = requestAnimationFrame(draw);
-      }
-    };
-    
-    draw();
-  };
-
-  const cleanupAudioVisualization = () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-    }
-    audioContextRef.current = null;
-    analyserRef.current = null;
   };
 
   // Temp message functions
@@ -695,6 +654,31 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             }
           }
           break;
+        case 'video':
+          if (tempMessage.videoData) {
+            const videoMessage: ChatMessage = {
+              id: Date.now().toString(),
+              chatId: selectedConversation.id,
+              message: tempMessage.content || '[Video]',
+              timestamp: new Date(),
+              ContactId: selectedConversation.contactId,
+              messageType: 'video',
+              isEdit: false,
+              isRead: false,
+              isDelivered: false,
+              isFromMe: true,
+              phone: selectedConversation.phone
+            };
+
+            if (socket) {
+              socket.emit('send_video', {
+                message: videoMessage,
+                videoData: tempMessage.videoData,
+                filename: `video_${Date.now()}.mp4`
+              });
+            }
+          }
+          break;
         case 'audio':
           if (tempMessage.audioBlob) {
             const reader = new FileReader();
@@ -741,24 +725,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          // Send location directly (no temp message step)
-          const locationText = `📍 Location: Current Location\nLat: ${latitude.toFixed(4)}\nLng: ${longitude.toFixed(4)}`;
-          onSendMessage(locationText);
-        },
-        (error) => {
-          console.error('Error getting location:', error);
-          alert('Could not get your location');
-        }
-      );
-    } else {
-      alert('Geolocation is not supported by this browser');
-    }
-  };
+  // Handler for Drafts button from MessageInput
+  const handleToggleDrafts = useCallback(() => {
+    console.log('handleToggleDrafts: toggling drafts panel', !showTempMessages);
+    setShowTempMessages(prev => !prev);
+  }, [showTempMessages]);
+
 
   // Favorite messages functions
   const toggleFavorite = (message: ChatMessage) => {
@@ -1034,13 +1006,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     };
   }, [showFavoritesPopup, showTemplatePopup, showForwardModal, replyToMessage, showReactionPicker, openMessageMenuId]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cancelRecording();
-    };
-  }, []);
-
   if (!selectedConversation) {
     return (
       <EmptyArea/>
@@ -1049,143 +1014,34 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   return (
     <div className="flex-1 flex flex-col tech-chat-bg circuit-pattern">
-      {/* Modern Chat Header */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
-        <div className="px-6 py-3 flex items-center justify-between">
-          {/* Left Section - User Info */}
-          <div className="flex items-center space-x-4 flex-1">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center shadow-md">
-                <User className="w-6 h-6 text-white" />
-              </div>
-              {isOnline && (
-                <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></div>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center space-x-2">
-                <h2 className="font-semibold text-gray-900 dark:text-white text-lg truncate">
-                  {selectedConversation.name}
-                </h2>
-                {selectedConversation.unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 font-medium">
-                    {selectedConversation.unreadCount}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {typingUsers.size > 0 ? (
-                  <span className="text-cyan-600 dark:text-cyan-400 italic">typing...</span>
-                ) : isOnline ? (
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                    Online
-                  </span>
-                ) : (
-                  <span className="flex items-center">
-                    <span className="w-2 h-2 bg-gray-400 rounded-full mr-2"></span>
-                    Offline
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-
-          {/* Right Section - Action Buttons */}
-          <div className="flex items-center space-x-2">
-            {/* Assign User Button */}
-            <button
-              onClick={handleAssignChat}
-              className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/30"
-              title="Assign to User"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span className="hidden md:inline">Assign</span>
-            </button>
-
-            {/* Chat Status Badge */}
-            <button
-              onClick={handleStatusButtonClick}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                chatStatus === 'closed'
-                  ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20 hover:bg-green-500/20 hover:border-green-500/30'
-                  : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 hover:border-cyan-500/30'
-              }`}
-              title={`Chat is ${chatStatus}. Click to ${chatStatus === 'open' ? 'close' : 'reopen'}`}
-            >
-              {chatStatus === 'closed' ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  <span className="hidden md:inline">Closed</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-4 h-4" />
-                  <span className="hidden md:inline">Open</span>
-                </>
-              )}
-            </button>
-
-            {/* Action Buttons */}
-            <div className="flex items-center space-x-1 ml-2">
-              <button 
-                onClick={() => setShowFavoritesPopup(true)}
-                className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
-                title="Favorite Messages"
-              >
-                <Heart className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-red-500" />
-                {favoriteMessages.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
-                    {favoriteMessages.length}
-                  </span>
-                )}
-              </button>
-              
-              <button 
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
-                title="Contact Info"
-              >
-                <Info className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-cyan-600" />
-              </button>
-
-              <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group">
-                <MoreVertical className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-cyan-600" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ChatHeader
+        selectedConversation={selectedConversation}
+        isOnline={isOnline}
+        typingUsers={typingUsers}
+        chatStatus={chatStatus}
+        onAssignClick={handleAssignChat}
+        onStatusClick={handleStatusButtonClick}
+        favoriteCount={favoriteMessages.length}
+        onFavoritesClick={() => setShowFavoritesPopup(true)}
+      />
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="text-center theme-text-accent mt-8">
-            <p className="text-lg font-medium">No messages yet. Start the conversation!</p>
-            <p className="text-sm opacity-70 mt-2">Send a message to begin chatting</p>
-          </div>
-        ) : (
-          messages.map((message:ChatMessage) => {
-            const isFavorite = favoriteMessages.some(fav => fav.id === message.id);
-            return (
-                    <Message
-                      message={message}
-                      key={message.id}
-                      onToggleFavorite={toggleFavorite}
-                      isFavorite={isFavorite}
-                      onForward={handleForwardMessage}
-                      onDelete={handleDeleteMessage}
-                      onEdit={handleEditMessage}
-                      onAddNote={handleAddNoteToMessage}
-                      onReply={handleReplyToMessage}
-                      onPin={handlePinMessage}
-                      onReact={handleReactToMessage}
-                      isMenuOpen={openMessageMenuId === message.id}
-                      onMenuToggle={() => handleMessageMenuToggle(message.id)}
-                    />
-            );
-          })
-        )}
-        
+        <MessageList
+          messages={messages}
+          favoriteMessages={favoriteMessages}
+          toggleFavorite={toggleFavorite}
+          onForward={handleForwardMessage}
+          onDelete={handleDeleteMessage}
+          onEdit={handleEditMessage}
+          onAddNote={handleAddNoteToMessage}
+          onReply={handleReplyToMessage}
+          onPin={handlePinMessage}
+          onReact={handleReactToMessage}
+          openMessageMenuId={openMessageMenuId}
+          onMenuToggle={handleMessageMenuToggle}
+        />
+
         {/* Typing indicator */}
         {typingUsers.size > 0 && (
           <div className="flex justify-start">
@@ -1198,247 +1054,37 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </div>
           </div>
         )}
-        
-        {/* Enhanced Recording Interface */}
+
+        {/* Recording area */}
         {(recordingState === 'recording' || recordingState === 'paused' || recordingState === 'reviewing') && (
-          <div className="flex justify-end">
-            <div className={`bg-gradient-to-r from-red-500/20 to-orange-500/20 backdrop-blur-sm px-6 py-4 rounded-xl border border-red-500/30 shadow-lg recording-state-indicator ${
-              recordingState === 'recording' ? 'recording-active' : 
-              recordingState === 'paused' ? 'recording-paused' : 
-              'recording-review'
-            }`}>
-              {recordingState === 'recording' && (
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="text-red-300 text-sm font-medium">Recording</span>
-                  </div>
-                  <div className="text-white text-sm font-mono recording-timer">
-                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={pauseRecording}
-                      className="p-2 bg-orange-500/20 hover:bg-orange-500/30 rounded-full recording-control-button"
-                      title="Pause"
-                    >
-                      <Pause className="w-4 h-4 text-orange-300" />
-                    </button>
-                    <button
-                      onClick={stopRecording}
-                      className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-full recording-control-button"
-                      title="Stop"
-                    >
-                      <Square className="w-4 h-4 text-red-300" />
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {recordingState === 'paused' && (
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                    <span className="text-orange-300 text-sm font-medium">Paused</span>
-                  </div>
-                  <div className="text-white text-sm font-mono recording-timer">
-                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={resumeRecording}
-                      className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-full recording-control-button"
-                      title="Resume"
-                    >
-                      <Play className="w-4 h-4 text-green-300" />
-                    </button>
-                    <button
-                      onClick={stopRecording}
-                      className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-full recording-control-button"
-                      title="Stop"
-                    >
-                      <Square className="w-4 h-4 text-red-300" />
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {recordingState === 'reviewing' && (
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-green-300 text-sm font-medium">Review Recording</span>
-                  </div>
-                  <div className="text-white text-sm font-mono recording-timer">
-                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={togglePreviewPlayback}
-                      className="p-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-full recording-control-button"
-                      title={isPlayingPreview ? "Pause" : "Play"}
-                    >
-                      {isPlayingPreview ? (
-                        <Pause className="w-4 h-4 text-blue-300" />
-                      ) : (
-                        <Play className="w-4 h-4 text-blue-300" />
-                      )}
-                    </button>
-                    <button
-                      onClick={recordAgain}
-                      className="p-2 bg-orange-500/20 hover:bg-orange-500/30 rounded-full recording-control-button"
-                      title="Record Again"
-                    >
-                      <RotateCcw className="w-4 h-4 text-orange-300" />
-                    </button>
-                    <button
-                      onClick={sendRecording}
-                      className="p-2 bg-green-500/20 hover:bg-green-500/30 rounded-full recording-control-button"
-                      title="Send"
-                    >
-                      <Send className="w-4 h-4 text-green-300" />
-                    </button>
-                    <button
-                      onClick={cancelRecording}
-                      className="p-2 bg-red-500/20 hover:bg-red-500/30 rounded-full recording-control-button"
-                      title="Cancel"
-                    >
-                      <X className="w-4 h-4 text-red-300" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <RecordingControls
+            recordingState={recordingState}
+            recordingDuration={recordingDuration}
+            isPlayingPreview={isPlayingPreview}
+            onPause={pauseRecording}
+            onStop={stopRecording}
+            onResume={resumeRecording}
+            onTogglePreview={togglePreviewPlayback}
+            onRecordAgain={recordAgain}
+            onSend={sendRecording}
+            onCancel={cancelRecording}
+          />
         )}
-        
+
         {/* Temp Messages Section */}
         {tempMessages.length > 0 && (
-          <div className="px-4 py-2 border-t border-gray-600/30">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-300">Draft Messages</h3>
-              <button
-                onClick={() => setShowTempMessages(!showTempMessages)}
-                className="text-xs text-gray-400 hover:text-gray-200 transition-colors"
-              >
-                {showTempMessages ? 'Hide' : 'Show'} ({tempMessages.length})
-              </button>
-            </div>
-            
-            {showTempMessages && (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
-                {tempMessages.map((tempMsg) => (
-                  <div key={tempMsg.id} className="bg-gray-700/50 rounded-lg p-3 border border-gray-600/30">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        {tempMsg.type === 'text' && (
-                          <div className="text-sm text-gray-200">{tempMsg.content}</div>
-                        )}
-                        
-                        {tempMsg.type === 'image_caption' && (
-                          <div className="space-y-2">
-                            <div className="text-sm text-gray-200">{tempMsg.content}</div>
-                            {tempMsg.imageData && (
-                              <img 
-                                src={`data:image/jpeg;base64,${tempMsg.imageData}`}
-                                alt="Draft image"
-                                className="w-20 h-20 object-cover rounded"
-                              />
-                            )}
-                          </div>
-                        )}
-                        
-                        {tempMsg.type === 'audio' && (
-                          <div className="flex items-center space-x-2">
-                            <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
-                              <Mic className="w-4 h-4 text-blue-300" />
-                            </div>
-                            <span className="text-sm text-gray-200">Audio Recording</span>
-                          </div>
-                        )}
-                        
-                        {tempMsg.type === 'location' && (
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="w-4 h-4 text-green-300" />
-                            <span className="text-sm text-gray-200">{tempMsg.location?.address}</span>
-                          </div>
-                        )}
-                        
-                        <div className="flex items-center space-x-1 mt-1">
-                          <Clock className="w-3 h-3 text-gray-400" />
-                          <span className="text-xs text-gray-400">
-                            {tempMsg.timestamp.toLocaleTimeString()}
-                          </span>
-                          {tempMsg.isDraft && (
-                            <span className="text-xs text-orange-400 ml-2">Draft</span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex space-x-1 ml-2">
-                        {tempMsg.isDraft && (
-                          <button
-                            onClick={() => setEditingTempMessage(tempMsg.id)}
-                            className="p-1 hover:bg-gray-600/50 rounded transition-colors"
-                            title="Edit"
-                          >
-                            <Edit3 className="w-3 h-3 text-gray-400" />
-                          </button>
-                        )}
-                        
-                        <button
-                          onClick={() => sendTempMessage(tempMsg)}
-                          className="p-1 hover:bg-green-600/50 rounded transition-colors"
-                          title="Send"
-                        >
-                          <Send className="w-3 h-3 text-green-400" />
-                        </button>
-                        
-                        <button
-                          onClick={() => deleteTempMessage(tempMsg.id)}
-                          className="p-1 hover:bg-red-600/50 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3 h-3 text-red-400" />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Edit mode */}
-                    {editingTempMessage === tempMsg.id && (
-                      <div className="mt-2 flex space-x-2">
-                        <input
-                          type="text"
-                          defaultValue={tempMsg.content}
-                          data-temp-id={tempMsg.id}
-                          className="flex-1 px-2 py-1 text-sm bg-gray-600 border border-gray-500 rounded text-white"
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              saveTempMessage(tempMsg.id, e.currentTarget.value);
-                            }
-                          }}
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => saveTempMessage(tempMsg.id, (document.querySelector(`input[data-temp-id="${tempMsg.id}"]`) as HTMLInputElement)?.value || tempMsg.content)}
-                          className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 rounded text-white"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setEditingTempMessage(null)}
-                          className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 rounded text-white"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <TempMessages
+            tempMessages={tempMessages}
+            showTempMessages={showTempMessages}
+            onToggleShow={() => setShowTempMessages(!showTempMessages)}
+            onEdit={(id) => setEditingTempMessage(id)}
+            onSend={sendTempMessage}
+            onDelete={deleteTempMessage}
+            editingId={editingTempMessage}
+            onSave={saveTempMessage}
+          />
         )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -1465,93 +1111,43 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               )}
 
               {/* Message Input */}
-      <div className="tech-header p-4">
-        <div className="flex items-center space-x-2">
-          <button className="p-2 hover:bg-gray-500/20 rounded-full transition-colors">
-            <Smile className="w-5 h-5 theme-text-accent" />
-          </button>
-          
-          {/* Image Upload Button */}
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"
-          >
-            <Image className="w-5 h-5 text-cyan-300" />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-          />
-          
-          {/* Video Upload Button */}
-          <button 
-            onClick={() => videoInputRef.current?.click()}
-            className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"
-          >
-            <Video className="w-5 h-5 text-cyan-300" />
-          </button>
-          <input
-            ref={videoInputRef}
-            type="file"
-            accept="video/*"
-            onChange={handleVideoUpload}
-            className="hidden"
-          />
-          
-          {/* Template Button */}
-          <button 
-            onClick={() => setShowTemplatePopup(true)}
-            className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"
-            title="Template Messages"
-          >
-            <FileText className="w-5 h-5 text-cyan-300" />
-          </button>
-          
-          {/* Voice Recording Button */}
-          <button 
-            onClick={recordingState === 'idle' ? startRecording : undefined}
-            disabled={recordingState !== 'idle'}
-            className={`p-2 rounded-full recording-button ${
-              recordingState === 'idle'
-                ? 'hover:bg-cyan-500/20' 
-                : 'opacity-50 cursor-not-allowed'
-            }`}
-            title={recordingState === 'idle' ? 'Start Recording' : 'Recording in progress'}
-          >
-            <Mic className="w-5 h-5 text-cyan-300" />
-          </button>
-          
-          {/* Location Button */}
-          <button 
-            onClick={getCurrentLocation}
-            className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"
-            title="Share Location"
-          >
-            <MapPin className="w-5 h-5 text-cyan-300" />
-          </button>
-          <div className="flex-1">
-            <input
-              ref={inputRef}
-              type="text"
-              value={newMessage}
-              onChange={handleInputChange}
-              onKeyUp={handleKeyPress}
-              placeholder="Type a message..."
-              className="chat-input w-full px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent placeholder-gray-400"
+      {/* Hidden file inputs for attachments */}
+      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+      <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
+
+      <MessageInput
+        newMessage={newMessage}
+        onChange={setNewMessage}
+        onSend={handleSendMessage}
+        onAttachImage={() => fileInputRef.current?.click()}
+        onAttachVideo={() => videoInputRef.current?.click()}
+        onStartRecording={() => startRecording()}
+        onStopRecording={() => stopRecording()}
+        isRecording={recordingState === 'recording' || recordingState === 'paused'}
+        onToggleTempMessages={handleToggleDrafts}
+      />
+
+      {/* Right-side Drafts / Temp Messages Drawer */}
+      {showTempMessages && (
+        <div className="fixed right-0 top-0 h-full w-96 bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto border-l border-gray-200 dark:border-gray-800">
+          <div className="p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Drafts & Templates</h3>
+            <button onClick={() => setShowTempMessages(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"><X className="w-5 h-5 text-gray-900 dark:text-white"/></button>
+          </div>
+          <div className="p-4">
+            <TempMessages
+              tempMessages={tempMessages}
+              showTempMessages={showTempMessages}
+              onToggleShow={() => setShowTempMessages(!showTempMessages)}
+              onEdit={(id) => setEditingTempMessage(id)}
+              onSend={sendTempMessage}
+              onDelete={deleteTempMessage}
+              editingId={editingTempMessage}
+              onSave={saveTempMessage}
             />
           </div>
-          <button
-            onClick={handleSendMessage}
-            disabled={!newMessage.trim()}
-            className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-full hover:from-cyan-600 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"
-          >
-            <Send className="w-5 h-5" />
-          </button>
         </div>
-      </div>
+      )}
 
       {/* Favorites Popup - Right Side */}
       {showFavoritesPopup && (
@@ -1591,7 +1187,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                         <div className="flex-1">
                           <p className="text-sm text-gray-900 dark:text-white mb-1">{message.message}</p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatTime(message.timeStamp)}
+                            {formatTime(message.timestamp)}
                           </p>
                         </div>
                         <button
@@ -1677,94 +1273,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 position={reactionPickerPosition}
               />
 
-              {/* Close Chat Modal */}
-              {showCloseModal && (
-                <div 
-                  className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center"
-                  onClick={() => {
-                    setShowCloseModal(false);
-                    setCloseReasons([]);
-                    setCloseOther('');
-                  }}
-                >
-                  <div 
-                    className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Modal Header */}
-                    <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                          <XCircle className="w-5 h-5 mr-2 text-red-500" />
-                          Close Chat
-                        </h3>
-                        <button
-                          onClick={() => {
-                            setShowCloseModal(false);
-                            setCloseReasons([]);
-                            setCloseOther('');
-                          }}
-                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                        >
-                          <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Modal Body */}
-                    <div className="p-6 space-y-4">
-                      <div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                          Please provide a reason for closing this chat with <strong className="text-gray-900 dark:text-white">{selectedConversation?.name}</strong>.
-                        </p>
-                        
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Closing Reason <span className="text-red-500">*</span>
-                        </label>
-                        <div>
-                          <div className="flex flex-wrap gap-2 mb-3">
-                            {availableCloseTags.map((tag) => (
-                              <button
-                                key={tag.id}
-                                type="button"
-                                onClick={() => setSelectedCloseTagId(tag.id === selectedCloseTagId ? null : tag.id)}
-                                className={`px-3 py-1.5 text-xs ${selectedCloseTagId === tag.id ? 'bg-cyan-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'} hover:opacity-90 rounded-full transition-colors border ${selectedCloseTagId === tag.id ? 'border-cyan-600' : 'border-gray-300 dark:border-gray-600'}`}
-                              >
-                                {tag.name}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* (replaced) selectable tag list and optional Other input above */}
-                    </div>
-
-                    {/* Modal Footer */}
-                    <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-800 rounded-b-xl">
-                      <div className="flex items-center justify-end space-x-3">
-                        <button
-                          onClick={() => {
-                            setShowCloseModal(false);
-                            setSelectedCloseTagId(null);
-                          }}
-                          className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleCloseChat}
-                          disabled={!selectedCloseTagId}
-                          className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center space-x-2 shadow-lg"
-                        >
-                          <Check className="w-4 h-4" />
-                          <span>Close Chat</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <ChatCloseModal
+                isOpen={showCloseModal}
+                tags={availableCloseTags}
+                selectedTagId={selectedCloseTagId}
+                onSelectTag={(id) => setSelectedCloseTagId(id)}
+                onCancel={() => { setShowCloseModal(false); setSelectedCloseTagId(null); }}
+                onConfirm={handleCloseChat}
+                conversationName={selectedConversation?.name}
+              />
 
               {/* Assign User Modal */}
               {showAssignModal && (

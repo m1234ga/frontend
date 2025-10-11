@@ -4,6 +4,7 @@ import { Search, MoreVertical, LogOut, User, Send, X, MessageSquare, Tag, Settin
 import Chat from './ChatRouters';
 import { NewChatModal } from './NewChatModal';
 import { Contact, Chat as ChatModel, ChatTag } from '../../../../Shared/Models';
+import TagPill from '../common/TagPill';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -1313,13 +1314,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                           {conversation.tags && conversation.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2 overflow-visible">
                               {conversation.tags.map((tag) => (
-                                <span
-                                  key={tag.id}
-                                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white whitespace-nowrap"
-                                  style={{ backgroundColor: tag.color }}
-                                >
-                                  {tag.name}
-                                </span>
+                                <div key={tag.id}>
+                                  <TagPill id={tag.id} name={tag.name} color={tag.color} />
+                                </div>
                               ))}
                             </div>
                           )}
@@ -1383,13 +1380,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                           {contact.tags && contact.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2 overflow-visible">
                               {contact.tags.map((tag) => (
-                                <span
-                                  key={tag.id}
-                                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white whitespace-nowrap"
-                                  style={{ backgroundColor: tag.color }}
-                                >
-                                  {tag.name}
-                                </span>
+                                <div key={tag.id}>
+                                  <TagPill id={tag.id} name={tag.name} color={tag.color} />
+                                </div>
                               ))}
                             </div>
                           )}
