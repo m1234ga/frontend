@@ -7,6 +7,7 @@ import { SocketProvider } from '@/contexts/SocketContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { LeftNavbar } from '@/components/common/LeftNavbar';
 import { usePathname } from 'next/navigation';
+import { Toaster } from 'react-hot-toast';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,6 +25,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <SocketProvider>
+              <Toaster position="top-right" />
               {showNavbar ? (
                 <div className="flex h-screen">
                   <LeftNavbar />

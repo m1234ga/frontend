@@ -1,6 +1,7 @@
 'use client';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, MoreVertical, LogOut, User, Send, X, MessageSquare, Tag, Settings, Archive, VolumeX, UserPlus, Plus, BarChart3, Check, SlidersHorizontal, Mail, Users, Calendar, ArrowUpDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Search, MoreVertical, LogOut, User, Send, X, MessageSquare, Tag, Plus, BarChart3, SlidersHorizontal, Mail, Users, Calendar, ArrowUpDown } from 'lucide-react';
+import ChatTab from './ChatTab';
 import Chat from './ChatRouters';
 import { NewChatModal } from './NewChatModal';
 import { Contact, Chat as ChatModel, ChatTag } from '../../../../Shared/Models';
@@ -37,6 +38,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(true);
+  const pageRef = useRef<number>(1);
+  const isFetching = useRef(false);
   const [showContactTagManager, setShowContactTagManager] = useState(false);
   const [selectedContactForTags, setSelectedContactForTags] = useState<Contact | null>(null);
   const [showChatTagManager, setShowChatTagManager] = useState(false);
@@ -55,8 +59,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [filters, setFilters] = useState({
     unreadOnly: false,
     onlineOnly: false,
-    sortBy: 'date' as 'date' | 'name' | 'unread',
-    dateFilter: 'all' as 'all' | 'today' | 'yesterday' | 'week' | 'month'
+    dateFilter: 'all' as 'all' | 'today' | 'yesterday' | 'week' | 'month',
+    sortBy: 'date' as 'date' | 'name' | 'unread'
   });
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedChatToAssign, setSelectedChatToAssign] = useState<string | null>(null);
@@ -69,25 +73,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const chatRouter = useMemo(() => Chat(token || ""), [token]);
   const { onChatUpdate } = useSocket();
 
-  // Helper function to assign colors to parsed tags
-  const getTagColor = useCallback((tagName: string): string => {
-    const colors = [
-      '#ef4444', // red
-      '#3b82f6', // blue
-      '#10b981', // green
-      '#f59e0b', // yellow
-      '#8b5cf6', // purple
-      '#06b6d4', // cyan
-      '#84cc16', // lime
-      '#f97316', // orange
-      '#ec4899', // pink
-      '#6b7280'  // gray
-    ];
-    
-    // Use tag name to consistently assign the same color
-    const hash = tagName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return colors[hash % colors.length];
-  }, []);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -101,9 +86,27 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     }
   }, [chatRouter]);
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async (reset = false) => {
     try {
-      const chats = await chatRouter.GetChatsWithTags();
+      if (isFetching.current) return;
+      isFetching.current = true;
+      const currentPage = reset ? 1 : pageRef.current;
+      type ChatFromApi = ChatModel & { tagsname?: string };
+      // Call the GetChatsPage helper and use the returned `chats` array directly.
+      const pageResult = await Chat(token||"").GetChatsPage(currentPage, 25);
+
+      // If API returned an error-shaped object, log and bail so it's visible in console
+      if (pageResult && typeof pageResult === 'object' && 'error' in pageResult) {
+        console.error('GetChatsPage API error:', pageResult);
+        setConversations([]);
+        setHasMore(false);
+        isFetching.current = false;
+        setIsLoading(false);
+        return;
+      }
+
+  // Extract chats array (default to empty array)
+  const chats: ChatFromApi[] = (pageResult && typeof pageResult === 'object' && 'chats' in pageResult && Array.isArray((pageResult as PageResult).chats)) ? (pageResult as PageResult).chats! : [];
       
       // Parse tagsname field and convert to ChatTag array
       const chatsWithParsedTags = chats.map((chat: ChatModel & { tagsname?: string }) => {
@@ -117,7 +120,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             return {
               id: tagId || `parsed-${chat.id}-${index}`,
               name: tagName || data.trim(),
-              color: getTagColor(tagName || data.trim()),
+              color: "black",
               status: 'available' as const,
               createdAt: new Date(),
               updatedAt: new Date()
@@ -131,16 +134,36 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         };
       });
       
+      const toMs = (v: any) => (v instanceof Date ? v.getTime() : new Date(v as any).getTime());
       const sortedChats = chatsWithParsedTags.sort(
-        (a: ChatModel, b: ChatModel) =>
-        Number(b.lastMessageTime) - Number(a.lastMessageTime)
+        (a: ChatModel, b: ChatModel) => toMs(b.lastMessageTime) - toMs(a.lastMessageTime)
       );
-      setConversations(sortedChats);
+      if (reset) {
+        setConversations(sortedChats);
+        pageRef.current = 2;
+      } else {
+        setConversations(prev => {
+          // dedupe by id
+          const ids = new Set(prev.map(p => p.id));
+          const filtered = (sortedChats as ChatModel[]).filter((c) => !ids.has(c.id));
+          return [...prev, ...filtered];
+        });
+        pageRef.current = pageRef.current + 1;
+      }
+      
+      // If we got fewer than 25 chats, there's no more data
+      // Also set hasMore to false if we got 0 chats
+      setHasMore(chats.length >= 25 && chats.length > 0);
     } catch (error) {
       console.error('Error fetching conversations:', error);
       setConversations([]);
+      setHasMore(false);
     }
-  }, [chatRouter, getTagColor]);
+    finally {
+      isFetching.current = false;
+      setIsLoading(false);
+    }
+  }, [chatRouter, isFetching]);
 
   // Fetch archived chats
   const fetchArchivedChats = useCallback(async () => {
@@ -251,8 +274,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
       if (response.ok) {
         const result = await response.json();
-        // Refresh conversations list
-        fetchConversations();
+        // Reset pagination and refresh conversations list (load page 1)
+        pageRef.current = 1;
+        await fetchConversations(true);
         // Select the new chat
         onSelectConversation(result.chat);
         setShowNewChatModal(false);
@@ -337,7 +361,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         parsedTags = tagNames.map((tagName: string, index: number) => ({
           id: `parsed-${updatedChat.id}-${index}`,
           name: tagName.trim(),
-          color: getTagColor(tagName.trim()),
+          color: "black",
           status: 'available' as const,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -350,7 +374,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         newConversations[existingIndex] = {
           ...newConversations[existingIndex],
           lastMessage: updatedChat.lastMessage,
-          lastMessageTime: updatedChat.lastMessageTime,
+          // Normalize to Date to keep client consistent
+          lastMessageTime: updatedChat.lastMessageTime ? new Date(updatedChat.lastMessageTime as any) : new Date(),
           unreadCount: updatedChat.unreadCount,
           isOnline: updatedChat.isOnline,
           isTyping: updatedChat.isTyping,
@@ -358,31 +383,69 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         };
       } else {
         // Add new conversation
-        newConversations = [{ ...updatedChat, tags: parsedTags }, ...prevConversations];
+        newConversations = [{
+          ...updatedChat,
+          lastMessageTime: updatedChat.lastMessageTime ? new Date(updatedChat.lastMessageTime as any) : new Date(),
+          tags: parsedTags
+        }, ...prevConversations];
       }
       
       // Sort by last message time
+      const toMs = (v: any) => (v instanceof Date ? v.getTime() : new Date(v as any).getTime());
       const sortedConversations = newConversations.sort(
-        (a: ChatModel, b: ChatModel) =>
-        Number(b.lastMessageTime) - Number(a.lastMessageTime)
+        (a: ChatModel, b: ChatModel) => toMs(b.lastMessageTime) - toMs(a.lastMessageTime)
       );
       
       return sortedConversations;
     });
-  }, [getTagColor]);
+  }, []);
 
   useEffect(() => {
     onChatUpdate(handleChatUpdate);
   }, [onChatUpdate, handleChatUpdate]);
 
   useEffect(() => {
-    fetchConversations();
-    fetchContacts();
-    fetchArchivedChats();
-    fetchAssignedChats();
-    fetchOpenChats();
-    fetchClosedChats();
+    // reset the paginated list on mount
+    const initializeData = async () => {
+      await fetchConversations(true);
+      await Promise.all([
+        fetchContacts(),
+        fetchArchivedChats(),
+        fetchAssignedChats(),
+        fetchOpenChats(),
+        fetchClosedChats()
+      ]);
+    };
+    initializeData();
   }, [fetchConversations, fetchContacts, fetchArchivedChats, fetchAssignedChats, fetchOpenChats, fetchClosedChats]);
+
+  // Infinite scroll: attach to sidebar container
+  useEffect(() => {
+    const el = document.getElementById('chat-sidebar-list');
+    if (!el) return;
+
+    const onScroll = () => {
+      if (!hasMore || isFetching.current) {
+        // If no more data, remove the scroll listener to prevent unnecessary checks
+        if (!hasMore) {
+          el.removeEventListener('scroll', onScroll);
+        }
+        return;
+      }
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+        fetchConversations();
+      }
+    };
+
+    // Only add listener if there's more data to load
+    if (hasMore) {
+      el.addEventListener('scroll', onScroll);
+    }
+    
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+    };
+  }, [hasMore, fetchConversations]);
 
 
   // Set client-side flag to prevent hydration mismatches
@@ -406,10 +469,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     }
   }, [isDarkMode, isClient]);
 
-  // Theme toggle functionality (currently unused but available for future use)
-  // const toggleTheme = () => {
-  //   setIsDarkMode(!isDarkMode);
-  // };
 
   // Update parent component when conversations change
   useEffect(() => {
@@ -418,16 +477,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     }
   }, [conversations, onConversationsUpdate]);
 
-  // Client-side only debugging - removed to prevent console spam
-  // useEffect(() => {
-  //   if (typeof window !== 'undefined' && isClient) {
-  //     console.log('Search term:', searchTerm);
-  //     console.log('All conversations:', conversations);
-  //     console.log('All contacts:', Contacts);
-  //   }
-  // }, [searchTerm, conversations, Contacts, isClient]);
-
-  // Apply all filters
   const filteredConversations = useMemo(() => {
     if (!isClient) return []; // Prevent hydration mismatch
     
@@ -478,6 +527,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     }
 
     // Apply sorting
+    const toMs = (v: any) => (v instanceof Date ? v.getTime() : new Date(v as any).getTime());
     const sorted = [...filtered].sort((a, b) => {
       switch (filters.sortBy) {
         case 'name':
@@ -486,7 +536,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           return b.unreadCount - a.unreadCount;
         case 'date':
         default:
-          return Number(b.lastMessageTime) - Number(a.lastMessageTime);
+          return toMs(b.lastMessageTime) - toMs(a.lastMessageTime);
       }
     });
 
@@ -501,18 +551,26 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     );
   }, [Contacts, searchTerm, isClient]);
 
-  const formatTime = useCallback((dateString?: string) => {
-    if (!isClient || !dateString) return '';
-    const date = new Date(dateString);
+  const formatTime = useCallback((dateInput?: string | number | Date) => {
+    if (!isClient || !dateInput) return '';
+
+    const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const timezone = process.env.NEXT_PUBLIC_TIMEZONE || 'Africa/Cairo';
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-    
+
     if (diffInHours < 24) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        timeZone: timezone
+      });
     } else if (diffInHours < 48) {
       return 'Yesterday';
     } else {
-      return date.toLocaleDateString();
+      return date.toLocaleDateString('en-US', { timeZone: timezone });
     }
   }, [isClient]);
 
@@ -563,7 +621,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       const formattedTags: ChatTag[] = dbTags.map((tag: { tagId: number; tagName: string }) => ({
         id: tag.tagId.toString(),
         name: tag.tagName,
-        color: getTagColor(tag.tagName),
+        color:"black",
         status: 'available' as const,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -574,7 +632,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       // Fallback to empty array if database fetch fails
       setAvailableTags([]);
     }
-  }, [chatRouter, getTagColor]);
+  }, [chatRouter]);
 
   // Initialize tags on component mount
   useEffect(() => {
@@ -587,7 +645,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       const formattedTag: ChatTag = {
         id: newTag.tagId.toString(),
         name: newTag.name,
-        color: getTagColor(newTag.tagName),
+        color: "black",
         status: 'available',
         createdAt: new Date(),
         updatedAt: new Date()
@@ -681,17 +739,13 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     setShowChatTagManager(true);
   };
 
-  const handleChatRightClick = (e: React.MouseEvent, chat: ChatModel) => {
-    e.preventDefault();
-    openChatTagManager(chat);
-  };
+  // right-click tag manager is handled at row-level in ChatTab
 
   // Chat tag management functions
   const assignTagToChat = async (chatId: string, tagId: string) => {
     try {
       await chatRouter.AssignTagToChat(chatId, tagId, user?.username || 'current_user');
       
-      // Refresh conversations to get updated tags
       await fetchConversations();
     } catch (error) {
       console.error('Error assigning tag to chat:', error);
@@ -712,7 +766,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   // Show loading state during hydration to prevent mismatch
   if (!isClient) {
     return (
-      <div className="w-100 tech-sidebar flex flex-col h-full">
+      <div className="w-[530px] min-w-[530px] tech-sidebar flex flex-col h-full">
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto mb-2"></div>
@@ -724,7 +778,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   }
 
   return (
-    <div className="w-100 tech-sidebar flex flex-col h-full">
+    <div className="w-[530px] min-w-[530px] tech-sidebar flex flex-col h-full">
       {isLoading ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
@@ -792,20 +846,24 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               <span className="text-sm text-white">Bulk Message</span>
             </button>
             <button
-              onClick={() => setShowCreateTagDialog(true)}
-              className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-              title="Create New Tag"
+              onClick={() => {
+                try {
+                  window.dispatchEvent(new CustomEvent('openTemplates'));
+                } catch {}
+              }}
+              className="flex items-center space-x-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+              title="New Message Template"
             >
-              <Tag className="w-4 h-4 text-white" />
-              <span className="text-sm text-white">Add Tag</span>
+              <Plus className="w-4 h-4 text-white" />
+              <span className="text-sm text-white">New Template</span>
             </button>
             <button
               onClick={() => setShowTagManagement(true)}
-              className="flex items-center space-x-2 px-3 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors"
-              title="Manage Tags"
+              className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+              title="Manage Tags & Create New Tag"
             >
-              <Settings className="w-4 h-4 text-white" />
-              <span className="text-sm text-white">Settings</span>
+              <Tag className="w-4 h-4 text-white" />
+              <span className="text-sm text-white">New Tag</span>
             </button>
           </div>
 
@@ -1117,12 +1175,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             </button>
           </div>
 
-          {/* Conversations/Users List */}
-          <div className="flex-1 overflow-y-auto">
-            {!showUsersList ? (
-              // Conversations list 
-              <div>
-                {(() => {
+          {/* Conversations/Users List (scrollable) with sticky footer below */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div id="chat-sidebar-list" className="flex-1 overflow-y-auto">
+              {!showUsersList ? (
+                // Conversations list 
+                (() => {
                   if (!isClient) {
                     return (
                       <div className="p-4 text-center theme-text-accent">
@@ -1133,7 +1191,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   }
 
                   let currentConversations: ChatModel[] = [];
-                  
                   switch (activeTab) {
                     case 'chats':
                       currentConversations = filteredConversations;
@@ -1177,159 +1234,29 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     );
                   }
 
-                  return currentConversations.map((conversation) => (
-                    <div
-                      key={conversation.id}
-                      onClick={() => onSelectConversation(conversation)}
-                      onContextMenu={(e) => handleChatRightClick(e, conversation)}
-                      className={`p-4 border-b theme-border-primary cursor-pointer hover:bg-gray-500/10 transition-colors ${
-                        selectedConversationId === conversation.id ? 'bg-gray-500/20 border-l-4 border-l-gray-600' : ''
-                      }`}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-full flex items-center justify-center shadow-md">
-                          <User className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0 overflow-visible">
-                            <div className="flex items-center justify-between">
-                            <div className="flex flex-col space-y-1">
-                              <div className="flex items-center space-x-2">
-                                <h3 className="text-lg font-semibold text-gray-800 truncate">
-                                  {conversation.name}
-                                </h3>
-                                {conversation.unreadCount > 0 && (
-                                  <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                                    {conversation.unreadCount}
-                                  </span>
-                                )}
-                                {conversation.status && (
-                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                    conversation.status === 'closed' 
-                                      ? 'bg-green-100 text-green-800' 
-                                      : 'bg-blue-100 text-blue-800'
-                                  }`}>
-                                    {conversation.status === 'closed' ? 'Closed' : 'Open'}
-                                  </span>
-                                )}
-                              </div>
-                              <h3 className="text-sm font-medium text-gray-600 truncate">
-                                {conversation.phone}
-                              </h3>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              {/* Online/Offline indicator */}
-                              <div className={`w-2 h-2 rounded-full ${conversation.isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                              {/* Archive button */}
-                              {activeTab === 'chats' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleArchiveChat(conversation.id);
-                                  }}
-                                  className="p-1 hover:bg-gray-500/20 rounded transition-colors"
-                                  title="Archive Chat"
-                                >
-                                  <Archive className="w-3 h-3 theme-text-accent" />
-                                </button>
-                              )}
-                              
-                              {/* Unarchive button */}
-                              {activeTab === 'archived' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleUnarchiveChat(conversation.id);
-                                  }}
-                                  className="p-1 hover:bg-gray-500/20 rounded transition-colors"
-                                  title="Unarchive Chat"
-                                >
-                                  <Archive className="w-3 h-3 theme-text-accent" />
-                                </button>
-                              )}
-                              
-                              {/* Mute/Unmute button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (conversation.isMuted) {
-                                    handleUnmuteChat(conversation.id);
-                                  } else {
-                                    handleMuteChat(conversation.id);
-                                  }
-                                }}
-                                className="p-1 hover:bg-gray-500/20 rounded transition-colors"
-                                title={conversation.isMuted ? "Unmute Chat" : "Mute Chat"}
-                              >
-                                <VolumeX className={`w-3 h-3 ${conversation.isMuted ? 'text-red-500' : 'theme-text-accent'}`} />
-                              </button>
-                              
-                              {/* Assign button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAssignChat(conversation.id);
-                                }}
-                                className="p-1 hover:bg-gray-500/20 rounded transition-colors"
-                                title="Assign Chat"
-                              >
-                                <UserPlus className="w-3 h-3 theme-text-accent" />
-                              </button>
-                              
-                              {/* Status toggle button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleChatStatus(conversation.id, conversation.status || 'open');
-                                }}
-                                className="p-1 hover:bg-gray-500/20 rounded transition-colors"
-                                title={conversation.status === 'closed' ? 'Reopen Chat' : 'Close Chat'}
-                              >
-                                <Check className={`w-3 h-3 ${conversation.status === 'closed' ? 'text-green-500' : 'theme-text-accent'}`} />
-                              </button>
-                              
-                              {/* Tag button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openChatTagManager(conversation);
-                                }}
-                                className="p-1 hover:bg-gray-500/20 rounded transition-colors"
-                                title="Manage Tags"
-                              >
-                                <Tag className="w-3 h-3 theme-text-accent" />
-                              </button>
-                              {conversation.lastMessageTime && (
-                                <span className="text-xs theme-text-accent">
-                                  {formatTime(conversation.lastMessageTime.toString())}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {conversation.lastMessage && (
-                            <p className="text-sm theme-text-secondary truncate">
-                              {conversation.lastMessage}
-                            </p>
-                          )}
-                          {/* Display chat tags */}
-                          {conversation.tags && conversation.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2 overflow-visible">
-                              {conversation.tags.map((tag) => (
-                                <div key={tag.id}>
-                                  <TagPill id={tag.id} name={tag.name} color={tag.color} />
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ));
-                })()}
-              </div>
-            ) : (
-              // Users list
-              <div>
-                {!isClient ? (
+                  return (
+                    <>
+                      <ChatTab
+                        conversations={currentConversations}
+                        selectedConversationId={selectedConversationId}
+                        onSelectConversation={onSelectConversation}
+                        onArchive={activeTab === 'chats' ? handleArchiveChat : undefined}
+                        onUnarchive={activeTab === 'archived' ? handleUnarchiveChat : undefined}
+                        onMuteToggle={(chatId) => {
+                          const conv = currentConversations.find(c => c.id === chatId);
+                          if (conv?.isMuted) handleUnmuteChat(chatId); else handleMuteChat(chatId);
+                        }}
+                        onAssign={handleAssignChat}
+                        onToggleStatus={handleToggleChatStatus}
+                        onOpenTagManager={openChatTagManager}
+                        formatTime={formatTime}
+                      />
+                    </>
+                  );
+                })()
+              ) : (
+                // Users list
+                !isClient ? (
                   <div className="p-4 text-center theme-text-accent">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto mb-2"></div>
                     <p className="theme-text-secondary">Loading...</p>
@@ -1390,9 +1317,24 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                       </div>
                     </div>
                   ))
-                )}
+                )
+              )}
+            </div>
+            {/* sticky footer - always visible when list is short */}
+            <div className="sticky bottom-0 z-10 border-t theme-border-primary px-3 py-2 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm">
+              <div className="max-w-full text-center">
+                {/* tiny visual separation */}
+                <div className="h-0.5 w-full bg-gray-100 dark:bg-gray-800 -mt-2 mb-2" aria-hidden />
+                {isFetching ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                    <span className="text-xs theme-text-secondary">Loading more...</span>
+                  </div>
+                ) : (!hasMore && conversations.length > 0) ? (
+                  <div className="text-xs theme-text-secondary">No more chats</div>
+                ) : null}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Bulk Message Side Popup */}

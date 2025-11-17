@@ -1,16 +1,21 @@
 "use client";
-"use client";
-
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import Image from 'next/image';
 import { Pin } from 'lucide-react';
 import { ImageModal } from './ImageModal';
 import { MessageMenu } from './MessageMenu';
 import { ChatMessage, MessageReaction } from '../../../../Shared/Models';
 
-const formatTime = (dateInput: string | Date) => {
-  const date = new Date(dateInput as unknown as string | number | Date);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const formatTime = (dateInput?: string | number | Date) => {
+  if (!dateInput) return '';
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput as string | number);
+  if (Number.isNaN(date.getTime())) return '';
+  const timezone = process.env.NEXT_PUBLIC_TIMEZONE || 'Africa/Cairo';
+  return date.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    timeZone: timezone
+  });
 };
 
 export function Message({
@@ -42,6 +47,20 @@ export function Message({
 }) {
   const isOwnMessage = message.isFromMe;
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+  const buildMediaUrl = (primary?: string, fallback?: string) => {
+    const pick = primary || fallback || '';
+    // Handle base64 data URLs (data:image/... or data:audio/...)
+    if (/^data:/.test(pick)) {
+      return pick;
+    }
+    // Handle http/https URLs
+    if (/^https?:\/\//i.test(pick)) {
+      return pick;
+    }
+    // Handle relative paths - prepend API base URL
+    return `${apiBaseUrl}${pick.replace(/^\/+/, '')}`;
+  };
 
   return (
     <>
@@ -67,6 +86,13 @@ export function Message({
         )}
 
         <div key={message.id} className={`message-bubble px-4 py-2 relative ${isOwnMessage ? 'message-sent' : 'message-received'} ${message.isPinned ? 'border-l-4 border-yellow-400' : ''}`}>
+          {/* Show pushname for messages not from me */}
+          {!isOwnMessage && message.pushName && (
+            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+              {message.pushName}
+            </div>
+          )}
+          
           {message.isPinned && (
             <div className="flex items-center space-x-1 mb-1 text-xs text-yellow-600 dark:text-yellow-400">
               <Pin className="w-3 h-3" />
@@ -94,41 +120,64 @@ export function Message({
                 <p className="text-sm">{message.message}</p>
                 {message.isEdit && (<div className="text-xs text-gray-500 dark:text-gray-400 italic mt-1">Edited</div>)}
               </div>
-              <span className="text-xs opacity-70">{formatTime(message.timestamp)}</span>
+              <span className="text-xs opacity-70">{formatTime(message.timeStamp)}</span>
             </div>
           )}
 
           {message.messageType === 'image' && (
             <div className="flex flex-col items-start space-y-1">
               <div className="cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setIsImageModalOpen(true)} title="Click to view full size">
-                <Image src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}imgs/${message.message}`} alt="sent" className="rounded-lg max-w-full" width={300} height={300} />
+                <Image src={buildMediaUrl(message.mediaPath, message.mediaPath ? undefined : `imgs/${message.id}.webp`)} alt="sent" className="rounded-lg max-w-full" width={300} height={300} />
               </div>
-              <span className="text-xs opacity-70">{formatTime(message.timestamp)}</span>
+              {!!message.message && message.message !== '[Image]' && (
+                <p className="text-sm">{message.message}</p>
+              )}
+              <span className="text-xs opacity-70">{formatTime(message.timeStamp)}</span>
             </div>
           )}
 
-          {message.messageType === 'audio' && (
-            <div className="flex items-center gap-3 bg-gray-100 dark:bg-gray-800 p-3 rounded-lg shadow-sm max-w-xs">
-              <div className="flex-shrink-0">
-                <audio controls className="w-48">
-                  <source src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}Audio/${message.message}`} type="audio/ogg" />
-                </audio>
-              </div>
-              <div className="flex flex-col justify-between text-xs text-gray-600 dark:text-gray-300"><span className="opacity-70">{formatTime(message.timestamp)}</span></div>
-            </div>
-          )}
+          {message.messageType === 'audio' &&
+            (() => {
+              const audioUrl = buildMediaUrl(message.mediaPath, `Audio/${message.message}`);
+              return (
+                <div className="flex flex-col items-start space-y-1">
+                  <div className="flex items-center gap-3 bg-gray-100 dark:bg-gray-800 p-3 rounded-lg shadow-sm max-w-xs">
+                    <div className="flex-shrink-0">
+                      <audio controls className="w-48">
+                        <source src={audioUrl} type="audio/opus" />
+                        <source src={audioUrl} type="audio/ogg" />
+                        <source src={audioUrl} type="audio/webm" />
+                      </audio>
+                    </div>
+                  </div>
+                  {!!message.message && message.message !== '[Audio]' && (
+                    <p className="text-sm">{message.message}</p>
+                  )}
+                  <span className="text-xs opacity-70">{formatTime(message.timestamp)}</span>
+                </div>
+              );
+            })()}
 
-          {message.messageType === 'video' && (
-            <div className="flex flex-col items-start space-y-1">
-              <video controls className="rounded-lg max-w-full"><source src={message.message} type="video/mp4" /></video>
-              <span className="text-xs opacity-70">{formatTime(message.timestamp)}</span>
-            </div>
-          )}
+          {message.messageType === 'video' &&
+            (() => {
+              const videoUrl = buildMediaUrl(message.mediaPath, message.message);
+              return (
+                <div className="flex flex-col items-start space-y-1">
+                  <video controls className="rounded-lg max-w-full">
+                    <source src={videoUrl} type="video/mp4" />
+                  </video>
+                  {!!message.message && message.message !== '[Video]' && (
+                    <p className="text-sm">{message.message}</p>
+                  )}
+                  <span className="text-xs opacity-70">{formatTime(message.timeStamp)}</span>
+                </div>
+              );
+            })()}
 
           {message.messageType === 'sticker' && (
             <div className="flex flex-col items-start space-y-1">
-              <Image src={'' + message.message} alt="sticker" className="w-24 h-24 object-contain" width={96} height={96} />
-              <span className="text-xs opacity-70">{formatTime(message.timestamp)}</span>
+              <Image src={buildMediaUrl(message.mediaPath, String(message.message || ''))} alt="sticker" className="w-24 h-24 object-contain" width={96} height={96} />
+              <span className="text-xs opacity-70">{formatTime(message.timeStamp)}</span>
             </div>
           )}
 
@@ -165,7 +214,15 @@ export function Message({
         )}
       </div>
 
-      <ImageModal isOpen={isImageModalOpen} onClose={() => setIsImageModalOpen(false)} imageSrc={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}imgs/${message.message}`} imageAlt="Chat image" />
+      <ImageModal
+        isOpen={isImageModalOpen}
+        onClose={() => setIsImageModalOpen(false)}
+        imageSrc={buildMediaUrl(message.mediaPath, message.mediaPath ? undefined : `imgs/${message.id}.webp`)}
+        imageAlt="Chat image"
+      />
     </>
   );
 }
+
+// Export memoized version to prevent unnecessary re-renders
+export const MemoizedMessage = memo(Message);

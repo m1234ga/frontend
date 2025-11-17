@@ -46,7 +46,7 @@ const TempMessages: React.FC<TempMessagesProps> = ({ tempMessages, showTempMessa
                     <div className="flex items-center space-x-2"><MapPin className="w-4 h-4 text-green-300"/><span className="text-sm text-gray-200">{tempMsg.location?.address}</span></div>
                   )}
 
-                  <div className="flex items-center space-x-1 mt-1"><span className="text-xs text-gray-400">{tempMsg.timestamp.toLocaleTimeString()}</span>{tempMsg.isDraft && (<span className="text-xs text-orange-400 ml-2">Draft</span>)}</div>
+                  <div className="flex items-center space-x-1 mt-1"><span className="text-xs text-gray-400">{tempMsg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: process.env.NEXT_PUBLIC_TIMEZONE || 'Africa/Cairo' })}</span>{tempMsg.isDraft && (<span className="text-xs text-orange-400 ml-2">Draft</span>)}</div>
                 </div>
 
                 <div className="flex space-x-1 ml-2">

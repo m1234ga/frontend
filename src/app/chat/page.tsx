@@ -38,14 +38,54 @@ export default function ChatPage() {
     setConversations(updatedConversations);
   }, []);
 
-  async function GetConversation(id: string) {
-    return await ChatRouter(token||"").GetMessagesById(id);
+  async function GetConversation(id: string, limit: number = 10, before?: string) {
+    return await ChatRouter(token||"").GetMessagesById(id, limit, before);
   }
 
   const handleSelectConversation = async (conversation: ChatModel) => {
-    const data = await GetConversation(conversation.id);
-    setSelectedConversation(conversation);
+    const data = await GetConversation(conversation.id, 10);
+    
+    // Update local state immediately to set unreadCount to 0
+    const updatedConversation = { ...conversation, unreadCount: 0 };
+    setSelectedConversation(updatedConversation);
     setMessages(data);
+    
+    // Update conversations list immediately
+    setConversations(prev => 
+      prev.map(conv => 
+        conv.id === conversation.id 
+          ? { ...conv, unreadCount: 0 }
+          : conv
+      )
+    );
+    
+    // Mark chat as read when opened (backend call)
+    try {
+      await ChatRouter(token || "").MarkChatAsRead(conversation.id);
+    } catch (error) {
+      console.error('Error marking chat as read:', error);
+    }
+  };
+
+  const handleLoadMoreMessages = async () => {
+    if (!selectedConversation || messages.length === 0) return;
+    
+    // Get the timestamp of the first (oldest) message
+    const oldestMessage = messages[0];
+    if (!oldestMessage.timeStamp) return;
+    
+    const beforeTimestamp = oldestMessage.timeStamp instanceof Date 
+      ? oldestMessage.timeStamp.toISOString() 
+      : new Date(oldestMessage.timeStamp).toISOString();
+    
+    const moreMessages = await GetConversation(selectedConversation.id, 10, beforeTimestamp);
+    
+    // Prepend older messages to the beginning
+    if (Array.isArray(moreMessages) && moreMessages.length > 0) {
+      setMessages(prev => [...moreMessages, ...prev]);
+      return true;
+    }
+    return false;
   };
 
   // Handle message sent confirmation
@@ -133,11 +173,74 @@ export default function ChatPage() {
     }
   };
 
-  const handleNewMessage = (message: ChatMessage) => {  
-    if (selectedConversation && message.chatId === selectedConversation.id) {
-      setMessages(prev => [...prev, message]);
+  const handleNewMessage = useCallback((message: ChatMessage) => {  
+    if (!selectedConversation || message.chatId !== selectedConversation.id) {
+      return;
     }
-  };
+    setMessages(prev => {
+      const existingIndex = prev.findIndex(msg => msg.id === message.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          ...message,
+          message: message.message?.replace(' (Sending...)', '') || message.message
+        };
+        return updated;
+      }
+      return [...prev, { ...message, message: message.message?.replace(' (Sending...)', '') || message.message }];
+    });
+  }, [selectedConversation]);
+
+  const handleMessageUpdate = useCallback((updatedMessage: ChatMessage & { tempId?: string }) => {
+    if (!selectedConversation || updatedMessage.chatId !== selectedConversation.id) {
+      return;
+    }
+    setMessages(prev => {
+      // First try to match by tempId (the original optimistic message ID)
+      // If tempId is provided, find the message with that ID
+      // Otherwise, try to find a sending message with same messageType
+      const existingIndex = updatedMessage.tempId
+        ? prev.findIndex(msg => msg.id === updatedMessage.tempId && msg.isFromMe)
+        : prev.findIndex(msg => 
+            msg.chatId === updatedMessage.chatId && 
+            msg.isFromMe && 
+            msg.messageType === updatedMessage.messageType &&
+            (!msg.mediaPath || msg.message?.includes('(Sending...)'))
+          );
+      
+      if (existingIndex === -1) {
+        // If not found, the message might have already been updated, or it's a new message
+        // In this case, we should add it as a new message
+        const updatedTimestamp = updatedMessage.timeStamp
+          ? new Date(updatedMessage.timeStamp)
+          : (updatedMessage.timestamp ? new Date(updatedMessage.timestamp) : new Date());
+        return [...prev, {
+          ...updatedMessage,
+          timestamp: updatedTimestamp.toISOString(),
+          timeStamp: updatedTimestamp
+        }];
+      }
+      
+      const updated = [...prev];
+      const existing = updated[existingIndex];
+      const updatedTimestamp = updatedMessage.timeStamp
+        ? new Date(updatedMessage.timeStamp)
+        : (updatedMessage.timestamp ? new Date(updatedMessage.timestamp) : (existing.timeStamp || new Date()));
+      
+      updated[existingIndex] = {
+        ...existing,
+        id: updatedMessage.id || existing.id,
+        // Always use the updated mediaPath if provided (replace base64 with real path)
+        mediaPath: updatedMessage.mediaPath ? updatedMessage.mediaPath : existing.mediaPath,
+        timestamp: updatedTimestamp.toISOString(),
+        timeStamp: updatedTimestamp,
+        message: existing.message?.replace(' (Sending...)', '') || existing.message || updatedMessage.message,
+        messageType: updatedMessage.messageType || existing.messageType
+      };
+      return updated;
+    });
+  }, [selectedConversation]);
 
   const handleNewChat = () => {
     console.log('New chat functionality');
@@ -181,7 +284,9 @@ export default function ChatPage() {
         messages={messages}
         onSendMessage={handleSendMessage}
         onNewMessage={handleNewMessage}
+        onMessageUpdate={handleMessageUpdate}
         conversations={conversations}
+        onLoadMoreMessages={handleLoadMoreMessages}
       />
     </div>
   );

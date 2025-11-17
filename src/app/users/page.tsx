@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { 
@@ -62,7 +62,14 @@ export default function UsersPage() {
     }
   }, [authenticated, authLoading, keycloak, router]);
 
-  const fetchUsers = async (search?: string) => {
+  const getErrorMessage = (err: unknown) => {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (err instanceof Error) return err.message;
+    try { return JSON.stringify(err); } catch { return String(err); }
+  };
+
+  const fetchUsers = useCallback(async (search?: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -84,13 +91,14 @@ export default function UsersPage() {
 
       const data = await response.json();
       setUsers(data.users || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch users');
+    } catch (err) {
+      const message = getErrorMessage(err);
+      setError(message || 'Failed to fetch users');
       console.error('Error fetching users:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,8 +133,9 @@ export default function UsersPage() {
       }
 
       fetchUsers(searchTerm);
-    } catch (err: any) {
-      alert('Error deleting user: ' + err.message);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      alert('Error deleting user: ' + message);
       console.error('Error deleting user:', err);
     }
   };
@@ -157,8 +166,9 @@ export default function UsersPage() {
       }
 
       fetchUsers(searchTerm);
-    } catch (err: any) {
-      alert('Error updating user status: ' + err.message);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      alert('Error updating user status: ' + message);
       console.error('Error updating user status:', err);
     }
   };

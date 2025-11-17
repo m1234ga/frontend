@@ -40,6 +40,36 @@ export default function Chat(token:string){
     }
   };
 
+  async function GetChatsPage(page = 1, limit = 25, status?: string) {
+    try {
+      const url = new URL(apiUrl + '/GetChatsPage');
+      url.searchParams.set('page', String(page));
+      url.searchParams.set('limit', String(limit));
+      if (status) url.searchParams.set('status', status);
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        return await response.json();
+      } else {
+        // Try to decode error body for diagnostics
+        let body: string | null = null;
+  try { body = await response.text(); } catch { /* ignore */ }
+        console.error('GetChatsPage failed', { status: response.status, body });
+        // Return a predictable shape so callers can display an error
+        return { error: `Request failed with status ${response.status}`, details: body } as { error: string; details: string | null };
+      }
+    } catch (error) {
+      console.error('Error fetching chats page:', error);
+      return null;
+    }
+  }
+
   async function UpdateContactTags(contactId: string, tags: string[]) {
     try {
       const response = await fetch(apiUrl + `/UpdateContactTags/${contactId}`, {
@@ -61,22 +91,27 @@ export default function Chat(token:string){
       throw error;
     }
   }
-  async function GetMessagesById  (id:string) {
+  async function GetMessagesById(id: string, limit: number = 10, before?: string) {
     try {
-      const response = await fetch( apiUrl+'/GetMessages/'+id, {
-        method:"GET",
+      let url = `${apiUrl}/GetMessages/${id}?limit=${limit}`;
+      if (before) {
+        url += `&before=${before}`;
+      }
+      
+      const response = await fetch(url, {
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${token}`, // ✅ Add the token here
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       if (response.ok) {
-        return await response.json();
-        
+        const data = await response.json();
+        return data.messages || data; // Support both new format (with messages) and old format
       }
     } catch (error) {
-      console.error('Error fetching Conf:', error);
-      return "Erorr"
+      console.error('Error fetching messages:', error);
+      return "Error"
     }
   };
   async function SendImage(phone: string, imageFile: File, caption?: string) {
@@ -329,6 +364,28 @@ export default function Chat(token:string){
     }
   }
 
+  // Mark chat as read
+  async function MarkChatAsRead(chatId: string) {
+    try {
+      const response = await fetch(apiUrl + `/MarkChatAsRead/${chatId}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error('Failed to mark chat as read');
+      }
+    } catch (error) {
+      console.error('Error marking chat as read:', error);
+      throw error;
+    }
+  }
+
   // User management for assignment
   async function GetUsers() {
     try {
@@ -391,6 +448,36 @@ export default function Chat(token:string){
       }
     } catch (error) {
       console.error('Error fetching templates:', error);
+      throw error;
+    }
+  }
+
+  async function CreateMessageTemplate(name: string, content: string, createdBy: string, imageFile?: File) {
+    try {
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('content', content);
+      formData.append('createdBy', createdBy);
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      const response = await fetch(apiUrl + `/CreateMessageTemplate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      
+      if (response.ok) {
+        return await response.json();
+      } else {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to create message template');
+      }
+    } catch (error) {
+      console.error('Error creating template:', error);
       throw error;
     }
   }
@@ -749,9 +836,11 @@ export default function Chat(token:string){
     GetChatTags,
     GetChatsWithTags,
     UpdateChatStatus,
+    MarkChatAsRead,
     GetUsers,
     AssignChat,
     GetMessageTemplates,
+    CreateMessageTemplate,
     ForwardMessage,
     ReplyToMessage,
     EditMessage,
@@ -766,7 +855,8 @@ export default function Chat(token:string){
     UnarchiveChat,
     MuteChat,
     UnmuteChat,
-    CreateNewChat
+    CreateNewChat,
+    GetChatsPage
 }
 }
 

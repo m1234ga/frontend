@@ -16,6 +16,15 @@ interface MessageInputProps {
 }
 
 const MessageInput: React.FC<MessageInputProps> = ({ newMessage, onChange, onSend, onAttachImage, onAttachVideo, onStartRecording, onStopRecording, isRecording, onToggleTempMessages }) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (newMessage.trim()) {
+        onSend();
+      }
+    }
+  };
+
   return (
     <div className="tech-header p-4">
       <div className="flex items-center space-x-2">
@@ -36,7 +45,14 @@ const MessageInput: React.FC<MessageInputProps> = ({ newMessage, onChange, onSen
         </button>
         <button onClick={onToggleTempMessages} className="p-2 hover:bg-gray-500/20 rounded-full transition-colors" title="Drafts">Drafts</button>
         <div className="flex-1">
-          <input type="text" value={newMessage} onChange={(e) => onChange(e.target.value)} placeholder="Type a message..." className="chat-input w-full px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent placeholder-gray-400" />
+          <input 
+            type="text" 
+            value={newMessage} 
+            onChange={(e) => onChange(e.target.value)} 
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message..." 
+            className="chat-input w-full px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent placeholder-gray-400" 
+          />
         </div>
         <button onClick={onSend} disabled={!newMessage.trim()} className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-full hover:from-cyan-600 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"><Send className="w-5 h-5" /></button>
       </div>

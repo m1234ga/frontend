@@ -11,6 +11,7 @@ interface SocketContextType {
   leaveConversation: (conversationId: string) => void;
   isConnected: boolean;
   onNewMessage: (callback: (message: ChatMessage) => void) => void;
+  onMessageUpdate: (callback: (message: ChatMessage & { tempId?: string }) => void) => void;
   onChatUpdate: (callback: (chat: Chat) => void) => void;
   onUserTyping: (callback: (data: { userId: string; isTyping: boolean; conversationId: string }) => void) => void;
   onChatPresence: (callback: (data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) => void;
@@ -40,6 +41,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
   // Use refs to store callbacks to prevent re-renders
   const newMessageCallbackRef = useRef<((message: ChatMessage) => void) | null>(null);
+  const messageUpdateCallbackRef = useRef<((message: ChatMessage & { tempId?: string }) => void) | null>(null);
   const chatUpdateCallbackRef = useRef<((chat: Chat) => void) | null>(null);
   const userTypingCallbackRef = useRef<((data: { userId: string; isTyping: boolean; conversationId: string }) => void) | null>(null);
   const chatPresenceCallbackRef = useRef<((data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) | null>(null);
@@ -70,6 +72,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         console.log('New message received:', message);
         if (newMessageCallbackRef.current) {
           newMessageCallbackRef.current(message);
+        }
+      });
+
+      // Listen for message updates (for updating mediaPath of sending messages)
+      newSocket.on('message_updated', (message: ChatMessage & { tempId?: string }) => {
+        console.log('Message updated:', message);
+        if (messageUpdateCallbackRef.current) {
+          messageUpdateCallbackRef.current(message);
         }
       });
 
@@ -150,6 +160,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     newMessageCallbackRef.current = callback;
   }, []);
 
+  const onMessageUpdate = useCallback((callback: (message: ChatMessage & { tempId?: string }) => void) => {
+    messageUpdateCallbackRef.current = callback;
+  }, []);
+
   const onChatUpdate = useCallback((callback: (chat:Chat) => void) => {
     chatUpdateCallbackRef.current = callback;
   }, []);
@@ -169,6 +183,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     leaveConversation,
     isConnected,
     onNewMessage,
+    onMessageUpdate,
     onChatUpdate,
     onUserTyping,
     onChatPresence,

@@ -120,7 +120,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
               </div>
             )}
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {new Date(message.timestamp).toLocaleString()}
+              {new Date(message.timestamp).toLocaleString('en-US', { timeZone: process.env.NEXT_PUBLIC_TIMEZONE || 'Africa/Cairo' })}
             </div>
           </div>
         </div>

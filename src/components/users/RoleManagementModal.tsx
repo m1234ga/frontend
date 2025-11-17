@@ -74,8 +74,15 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
 
       const availableRolesData = await availableRolesResponse.json();
       setAvailableRoles(availableRolesData.roles || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch roles');
+    } catch (err) {
+      const getErrorMessage = (err: unknown) => {
+        if (!err) return 'Unknown error';
+        if (typeof err === 'string') return err;
+        if (err instanceof Error) return err.message;
+        try { return JSON.stringify(err); } catch { return String(err); }
+      };
+      const message = getErrorMessage(err);
+      setError(message || 'Failed to fetch roles');
       console.error('Error fetching roles:', err);
     } finally {
       setLoading(false);
@@ -110,8 +117,15 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
 
       setSelectedRoles(new Set());
       await fetchRoles();
-    } catch (err: any) {
-      setError(err.message || 'An error occurred');
+    } catch (err) {
+      const getErrorMessage = (err: unknown) => {
+        if (!err) return 'Unknown error';
+        if (typeof err === 'string') return err;
+        if (err instanceof Error) return err.message;
+        try { return JSON.stringify(err); } catch { return String(err); }
+      };
+      const message = getErrorMessage(err);
+      setError(message || 'An error occurred');
       console.error('Error adding roles:', err);
     } finally {
       setLoading(false);
@@ -142,8 +156,15 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
       }
 
       await fetchRoles();
-    } catch (err: any) {
-      setError(err.message || 'An error occurred');
+    } catch (err) {
+      const getErrorMessage = (err: unknown) => {
+        if (!err) return 'Unknown error';
+        if (typeof err === 'string') return err;
+        if (err instanceof Error) return err.message;
+        try { return JSON.stringify(err); } catch { return String(err); }
+      };
+      const message = getErrorMessage(err);
+      setError(message || 'An error occurred');
       console.error('Error removing role:', err);
     } finally {
       setLoading(false);

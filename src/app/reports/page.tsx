@@ -38,21 +38,22 @@ interface ReportStats {
 }
 
 export default function ReportsPage() {
-  const { authenticated, loading, user } = useAuth();
+  const { authenticated, loading, user, token } = useAuth();
   const router = useRouter();
   const [dateRange, setDateRange] = useState('7days');
   const [stats, setStats] = useState<ReportStats>({
-    totalMessages: 1247,
-    sentMessages: 623,
-    receivedMessages: 624,
-    avgResponseTime: 3.5,
-    totalChats: 156,
-    openChats: 23,
-    closedChats: 133,
-    avgResolutionTime: 45,
-    customerSatisfaction: 4.5,
-    activeAgents: 8
+    totalMessages: 0,
+    sentMessages: 0,
+    receivedMessages: 0,
+    avgResponseTime: 0,
+    totalChats: 0,
+    openChats: 0,
+    closedChats: 0,
+    avgResolutionTime: 0,
+    customerSatisfaction: 0,
+    activeAgents: 0
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -60,7 +61,34 @@ export default function ReportsPage() {
     }
   }, [authenticated, loading, router]);
 
-  if (loading) {
+  useEffect(() => {
+    fetchReportsData();
+  }, [dateRange, token]);
+
+  const fetchReportsData = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/reports?dateRange=${dateRange}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      } else {
+        console.error('Failed to fetch reports data');
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (loading || isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
