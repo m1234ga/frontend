@@ -92,6 +92,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       isFetching.current = true;
       const currentPage = reset ? 1 : pageRef.current;
       type ChatFromApi = ChatModel & { tagsname?: string };
+      type PageResult = { chats: ChatFromApi[] };
       // Call the GetChatsPage helper and use the returned `chats` array directly.
       const pageResult = await Chat(token||"").GetChatsPage(currentPage, 25);
 
@@ -134,7 +135,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         };
       });
       
-      const toMs = (v: any) => (v instanceof Date ? v.getTime() : new Date(v as any).getTime());
+      const toMs = (v: Date | string | number) => (v instanceof Date ? v.getTime() : new Date(v).getTime());
       const sortedChats = chatsWithParsedTags.sort(
         (a: ChatModel, b: ChatModel) => toMs(b.lastMessageTime) - toMs(a.lastMessageTime)
       );
@@ -375,7 +376,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           ...newConversations[existingIndex],
           lastMessage: updatedChat.lastMessage,
           // Normalize to Date to keep client consistent
-          lastMessageTime: updatedChat.lastMessageTime ? new Date(updatedChat.lastMessageTime as any) : new Date(),
+          lastMessageTime: updatedChat.lastMessageTime ? new Date(updatedChat.lastMessageTime as Date | string | number) : new Date(),
           unreadCount: updatedChat.unreadCount,
           isOnline: updatedChat.isOnline,
           isTyping: updatedChat.isTyping,
@@ -385,13 +386,13 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         // Add new conversation
         newConversations = [{
           ...updatedChat,
-          lastMessageTime: updatedChat.lastMessageTime ? new Date(updatedChat.lastMessageTime as any) : new Date(),
+          lastMessageTime: updatedChat.lastMessageTime ? new Date(updatedChat.lastMessageTime as Date | string | number) : new Date(),
           tags: parsedTags
         }, ...prevConversations];
       }
       
       // Sort by last message time
-      const toMs = (v: any) => (v instanceof Date ? v.getTime() : new Date(v as any).getTime());
+      const toMs = (v: Date | string | number) => (v instanceof Date ? v.getTime() : new Date(v).getTime());
       const sortedConversations = newConversations.sort(
         (a: ChatModel, b: ChatModel) => toMs(b.lastMessageTime) - toMs(a.lastMessageTime)
       );
@@ -527,7 +528,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     }
 
     // Apply sorting
-    const toMs = (v: any) => (v instanceof Date ? v.getTime() : new Date(v as any).getTime());
+    const toMs = (v: Date | string | number) => (v instanceof Date ? v.getTime() : new Date(v).getTime());
     const sorted = [...filtered].sort((a, b) => {
       switch (filters.sortBy) {
         case 'name':

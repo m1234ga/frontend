@@ -67,12 +67,12 @@ export default function ChatPage() {
     }
   };
 
-  const handleLoadMoreMessages = async () => {
-    if (!selectedConversation || messages.length === 0) return;
+  const handleLoadMoreMessages = async (): Promise<boolean> => {
+    if (!selectedConversation || messages.length === 0) return false;
     
     // Get the timestamp of the first (oldest) message
     const oldestMessage = messages[0];
-    if (!oldestMessage.timeStamp) return;
+    if (!oldestMessage.timeStamp) return false;
     
     const beforeTimestamp = oldestMessage.timeStamp instanceof Date 
       ? oldestMessage.timeStamp.toISOString() 
@@ -131,7 +131,7 @@ export default function ChatPage() {
         id: Date.now().toString(),
         chatId: selectedConversation.id,
         message: content,
-        timestamp: new Date(),
+        timeStamp: new Date(),
         ContactId: selectedConversation.contactId,
         messageType: 'text',
         isEdit: false,
