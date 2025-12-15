@@ -4,11 +4,11 @@ import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
-import { 
-  Sun, 
-  Moon, 
-  BarChart3, 
-  MessageSquare, 
+import {
+  Sun,
+  Moon,
+  BarChart3,
+  MessageSquare,
   Settings,
   Users,
   Home,
@@ -17,20 +17,19 @@ import {
 
 export const LeftNavbar = () => {
   const { theme, toggleTheme } = useTheme();
-  const { keycloak } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   // Check if user has admin access
-  const userRoles = keycloak?.realmAccess?.roles || [];
-  const hasAdminAccess = userRoles.includes('admin') || userRoles.includes('user-manager');
+  const hasAdminAccess = user?.role === 'admin' || user?.role === 'user-manager';
 
   const allNavItems = [
     {
       icon: MessageSquare,
       label: 'Chats',
       path: '/chat',
-      color: 'text-cyan-500',
+      color: 'text-soft-primary',
       requiresAdmin: false
     },
     {
@@ -51,7 +50,7 @@ export const LeftNavbar = () => {
       icon: Users,
       label: 'Users',
       path: '/users',
-      color: 'text-green-500',
+      color: 'text-emerald-500',
       requiresAdmin: true
     },
     {
@@ -69,76 +68,71 @@ export const LeftNavbar = () => {
   const isActive = (path: string) => pathname === path;
 
   return (
-    <div className="w-16 h-screen bg-gray-900 dark:bg-gray-950 border-r border-gray-800 dark:border-gray-900 flex flex-col items-center py-4 space-y-4">
-      {/* Logo / Home */}
-      <button
-        onClick={() => router.push('/chat')}
-        className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg hover:shadow-cyan-500/50 transition-all duration-200 mb-4"
-        title="Home"
-      >
-        <Home className="w-6 h-6 text-white" />
-      </button>
+    <div className="h-screen py-6 pl-4 flex flex-col z-50">
+      {/* Glass Dock Container */}
+      <div className="glass-panel w-20 flex-1 flex flex-col items-center py-6 space-y-6">
 
-      {/* Divider */}
-      <div className="w-10 h-px bg-gray-800 dark:bg-gray-700"></div>
+        {/* Logo / Home */}
+        <button
+          onClick={() => router.push('/chat')}
+          className="w-12 h-12 bg-gradient-to-br from-soft-primary to-soft-primary-light rounded-2xl flex items-center justify-center shadow-soft-lg hover:scale-110 transition-transform duration-200"
+          title="Home"
+        >
+          <Home className="w-6 h-6 text-white" />
+        </button>
 
-      {/* Navigation Items */}
-      <div className="flex-1 flex flex-col space-y-2">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.path);
-          
-          return (
-            <button
-              key={item.path}
-              onClick={() => router.push(item.path)}
-              className={`relative group w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                active
-                  ? 'bg-gray-800 dark:bg-gray-800 shadow-lg'
-                  : 'hover:bg-gray-800/50 dark:hover:bg-gray-800/50'
-              }`}
-              title={item.label}
-            >
-              <Icon 
-                className={`w-6 h-6 ${active ? item.color : 'text-gray-400 group-hover:text-gray-300'}`} 
-              />
-              
-              {/* Active Indicator */}
-              {active && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-cyan-500 rounded-r-full"></div>
-              )}
+        {/* Divider */}
+        <div className="w-8 h-px bg-gray-200 dark:bg-gray-700/50"></div>
 
-              {/* Tooltip */}
-              <div className="absolute left-16 ml-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50 shadow-lg">
-                {item.label}
-                <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-800"></div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+        {/* Navigation Items */}
+        <div className="flex-1 flex flex-col space-y-3 w-full items-center">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
 
-      {/* Divider */}
-      <div className="w-10 h-px bg-gray-800 dark:bg-gray-700"></div>
+            return (
+              <button
+                key={item.path}
+                onClick={() => router.push(item.path)}
+                className={`relative group w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${active
+                    ? 'bg-soft-primary/10 text-soft-primary shadow-soft-sm'
+                    : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-600 dark:hover:text-gray-200'
+                  }`}
+                title={item.label}
+              >
+                <Icon className={`w-5 h-5 ${active ? 'stroke-[2.5px]' : 'stroke-2'}`} />
 
-      {/* Theme Toggle */}
-      <button
-        onClick={toggleTheme}
-        className="w-12 h-12 bg-gray-800 dark:bg-gray-800 rounded-xl flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 group relative"
-        title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-      >
-        {theme === 'dark' ? (
-          <Sun className="w-6 h-6 text-yellow-500 group-hover:rotate-90 transition-transform duration-300" />
-        ) : (
-          <Moon className="w-6 h-6 text-indigo-400 group-hover:-rotate-12 transition-transform duration-300" />
-        )}
-        
-        {/* Tooltip */}
-        <div className="absolute left-16 ml-2 px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50 shadow-lg">
-          {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-          <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-800"></div>
+                {/* Active Indicator Dot */}
+                {active && (
+                  <div className="absolute right-2 top-2 w-1.5 h-1.5 bg-soft-primary rounded-full animate-pulse"></div>
+                )}
+
+                {/* Soft Tooltip */}
+                <div className="absolute left-14 px-4 py-2 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-200 text-sm font-medium rounded-xl opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 pointer-events-none transition-all duration-200 whitespace-nowrap shadow-soft-xl border border-gray-100 dark:border-gray-700 z-50">
+                  {item.label}
+                </div>
+              </button>
+            );
+          })}
         </div>
-      </button>
+
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="w-12 h-12 rounded-2xl flex items-center justify-center hover:bg-gray-100 dark:hover:bg-slate-800 transition-all duration-200 group relative"
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+        >
+          {theme === 'dark' ? (
+            <div className="bg-amber-100 p-2 rounded-xl text-amber-500 group-hover:rotate-12 transition-transform">
+              <Sun className="w-5 h-5" />
+            </div>
+          ) : (
+            <div className="bg-indigo-100 p-2 rounded-xl text-indigo-500 group-hover:-rotate-12 transition-transform">
+              <Moon className="w-5 h-5" />
+            </div>
+          )}
+        </button>
+      </div>
     </div>
   );
 };

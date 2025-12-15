@@ -1,4 +1,4 @@
-'use client'; 
+'use client';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Heart, FileText, Star, User, Search, Plus, Image as ImageIcon } from 'lucide-react';
 import { EmptyArea } from '@/components/chat/EmptyArea';
@@ -19,7 +19,7 @@ import MessageInput from './MessageInput';
 
 interface ChatAreaProps {
   selectedConversation: ChatModel | null;
-  messages:ChatMessage[];
+  messages: ChatMessage[];
   onSendMessage: (content: string) => void;
   onNewMessage?: (message: ChatMessage) => void;
   onMessageUpdate?: (message: ChatMessage & { tempId?: string }) => void;
@@ -60,7 +60,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [reactionPickerPosition, setReactionPickerPosition] = useState({ x: 0, y: 0 });
   const [messageToReact, setMessageToReact] = useState<ChatMessage | null>(null);
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(null);
-  const [templates, setTemplates] = useState<{id: number, name: string, content: string}[]>([]);
+  const [templates, setTemplates] = useState<{ id: number, name: string, content: string }[]>([]);
   const [showCreateTemplateForm, setShowCreateTemplateForm] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateContent, setNewTemplateContent] = useState('');
@@ -90,7 +90,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const isLoadingMoreRef = useRef(false);
-  
+  const prevMessagesRef = useRef<ChatMessage[]>([]);
+
   const { joinConversation, leaveConversation, onNewMessage: onSocketNewMessage, onMessageUpdate: onSocketMessageUpdate, onUserTyping, onChatPresence, socket } = useSocket();
   const { user, token } = useAuth();
   const chatRouter = useMemo(() => Chat(token || ""), [token]);
@@ -112,10 +113,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       } else {
         dateVal = input as string | Date | number;
       }
-  const date = new Date(String(dateVal));
+      const date = new Date(String(dateVal));
       const timezone = process.env.NEXT_PUBLIC_TIMEZONE || 'Africa/Cairo';
-      return date.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
         minute: '2-digit',
         timeZone: timezone
       });
@@ -146,9 +147,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       if (selectedConversation) {
         selectedConversation.status = newStatus;
       }
-  // Close modal and reset selected tag
-  setShowCloseModal(false);
-  setSelectedCloseTagId(null);
+      // Close modal and reset selected tag
+      setShowCloseModal(false);
+      setSelectedCloseTagId(null);
     } catch (error) {
       console.error('Error toggling chat status:', error);
       alert('Failed to update chat status. Please try again.');
@@ -162,8 +163,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       try {
         // Try to fetch tags from API; fallback to default list if fails
         const tags = await chatRouter.GetTags();
-  type TagApiItem = { tagId?: number | string; id?: number | string; tagName?: string; name?: string };
-  const formatted = (tags || []).map((t: TagApiItem) => ({ id: t.tagId?.toString?.() || t.id?.toString?.() || t.tagName || t.name || '', name: t.tagName || t.name || '' }));
+        type TagApiItem = { tagId?: number | string; id?: number | string; tagName?: string; name?: string };
+        const formatted = (tags || []).map((t: TagApiItem) => ({ id: t.tagId?.toString?.() || t.id?.toString?.() || t.tagName || t.name || '', name: t.tagName || t.name || '' }));
         if (formatted.length === 0) {
           setAvailableCloseTags([
             { id: '1', name: 'Issue Resolved' },
@@ -176,7 +177,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         } else {
           setAvailableCloseTags(formatted);
         }
-  } catch {
+      } catch {
         setAvailableCloseTags([
           { id: '1', name: 'Issue Resolved' },
           { id: '2', name: 'Customer Satisfied' },
@@ -234,7 +235,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   // Perform the actual assignment
   const performAssignment = async () => {
     if (!selectedConversation?.id || !selectedUserId || !user?.id) return;
-    
+
     try {
       await chatRouter.AssignChat(selectedConversation.id, selectedUserId, user.id);
       toast.success('Chat assigned successfully');
@@ -253,7 +254,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (selectedConversation) {
       // Join the conversation room
       joinConversation(selectedConversation.id);
-      
+
       // Set up socket event listeners
       onSocketNewMessage((message: ChatMessage) => {
         // Play sound for incoming messages (not from me)
@@ -327,13 +328,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(async () => {
         if (isLoadingMoreRef.current) return;
-        
+
         // Check if scrolled near the top (within 100px)
         if (container.scrollTop <= 100) {
           isLoadingMoreRef.current = true;
           const hasMore = await onLoadMoreMessages();
           isLoadingMoreRef.current = false;
-          
+
           if (!hasMore) {
             // No more messages, remove listener
             container.removeEventListener('scroll', handleScroll);
@@ -461,7 +462,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         if (onNewMessage) {
           onNewMessage(newMessage);
         }
-        
+
         toast.success('Video sent successfully');
       } catch (error) {
         console.error('Error sending video:', error);
@@ -490,7 +491,16 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   }, [chatRouter]);
 
   useEffect(() => {
-    scrollToBottom();
+    const lastMessage = messages[messages.length - 1];
+    const prevLastMessage = prevMessagesRef.current[prevMessagesRef.current.length - 1];
+
+    // Use a small timeout to ensure DOM has updated
+    // Auto-scroll only if a NEW message was added to the END or if it's the initial load
+    if (messages.length > 0 && (!prevLastMessage || lastMessage?.id !== prevLastMessage?.id)) {
+      scrollToBottom();
+    }
+
+    prevMessagesRef.current = messages;
   }, [messages]);
 
   useEffect(() => {
@@ -512,7 +522,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         // Send regular message directly
         onSendMessage(newMessage.trim());
       }
-      
+
       setNewMessage('');
       setIsTyping(false);
     }
@@ -532,13 +542,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       'audio/wav',
       'audio/mpeg'
     ];
-    
+
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) {
         return type;
       }
     }
-    
+
     // Fallback to default
     return '';
   };
@@ -607,7 +617,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       oscillator.start();
       oscillator.stop(ctx.currentTime + 0.22);
       oscillator.onended = () => {
-        try { ctx.close(); } catch {}
+        try { ctx.close(); } catch { }
       };
     } catch (e) {
       // ignore audio errors (e.g., autoplay restrictions)
@@ -619,11 +629,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     console.log('startRecording: attempting to getUserMedia');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+
       // Get supported MIME type
       const mimeType = getSupportedMimeType();
       console.log('Using audio MIME type:', mimeType);
-      
+
       // Create MediaRecorder with supported MIME type
       const options = mimeType ? { mimeType } : {};
       const recorder = new MediaRecorder(stream, options);
@@ -641,12 +651,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         const audioBlob = new Blob(chunks, { type: actualMimeType });
         setRecordedAudio(audioBlob);
         setRecordingState('reviewing');
-        
+
         // Create audio preview
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
         setAudioPreview(audio);
-        
+
         console.log('recorder.onstop: generated audio blob, entering reviewing state');
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -663,19 +673,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       };
 
       recorder.start(100); // Collect data every 100ms
-  setMediaRecorder(recorder);
-  setRecordingStream(stream);
-  setRecordingState('recording');
-  setRecordingDuration(0);
-      
+      setMediaRecorder(recorder);
+      setRecordingStream(stream);
+      setRecordingState('recording');
+      setRecordingDuration(0);
+
       // Start recording timer
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
 
-  // Setup audio visualization
-  setupAudioVisualization(stream);
-      
+      // Setup audio visualization
+      setupAudioVisualization(stream);
+
     } catch (error) {
       console.error('Error accessing microphone:', error);
       alert('Could not access microphone. Please check permissions.');
@@ -728,14 +738,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       audioPreview.pause();
       URL.revokeObjectURL(audioPreview.src);
     }
-    
+
     // Notify backend about recording cancellation
     if (socket && recordedAudio) {
       socket.emit('cancel_recording', {
         filename: `audio_${Date.now()}.webm` // Use a consistent filename pattern
       });
     }
-    
+
     // Reset all recording state
     setRecordingState('idle');
     setRecordingDuration(0);
@@ -760,12 +770,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         // Convert Blob to base64
         const reader = new FileReader();
         reader.readAsDataURL(recordedAudio);
-        
+
         reader.onloadend = async () => {
           try {
             const base64Audio = reader.result as string;
             const audioData = base64Audio.split(',')[1]; // Remove data URL prefix
-            
+
             // Create message object
             const message: ChatMessage = {
               id: Date.now().toString(),
@@ -847,7 +857,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     });
   };
 
-  const sendTemplateMessage = (template: {id: number, name: string, content: string}) => {
+  const sendTemplateMessage = (template: { id: number, name: string, content: string }) => {
     setNewMessage(template.content);
     setShowTemplatePopup(false);
     inputRef.current?.focus();
@@ -872,7 +882,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         user.id.toString(),
         newTemplateImage || undefined
       );
-      
+
       toast.success('Template created successfully');
       setNewTemplateName('');
       setNewTemplateContent('');
@@ -913,8 +923,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const handleForward = async (message: ChatMessage, targetChatId: string) => {
     try {
+      message.phone = selectedConversation?.phone || '';
       const result = await chatRouter.ForwardMessage(message, targetChatId, user?.id?.toString() || 'current_user');
-      
+
       // Emit socket event to notify other clients
       if (socket) {
         socket.emit('message_forwarded', {
@@ -1135,20 +1146,20 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         if (showTemplatePopup) {
           setShowTemplatePopup(false);
         }
-                if (showForwardModal) {
-                  setShowForwardModal(false);
-                  setMessageToForward(null);
-                }
-                if (replyToMessage) {
-                  setReplyToMessage(null);
-                }
-                if (showReactionPicker) {
-                  setShowReactionPicker(false);
-                  setMessageToReact(null);
-                }
-                if (openMessageMenuId) {
-                  setOpenMessageMenuId(null);
-                }
+        if (showForwardModal) {
+          setShowForwardModal(false);
+          setMessageToForward(null);
+        }
+        if (replyToMessage) {
+          setReplyToMessage(null);
+        }
+        if (showReactionPicker) {
+          setShowReactionPicker(false);
+          setMessageToReact(null);
+        }
+        if (openMessageMenuId) {
+          setOpenMessageMenuId(null);
+        }
       }
     };
 
@@ -1163,12 +1174,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   if (!selectedConversation) {
     return (
-      <EmptyArea/>
+      <EmptyArea />
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col tech-chat-bg circuit-pattern">
+    <div className="flex-1 flex flex-col h-full relative bg-white dark:bg-black text-black dark:text-white transition-colors duration-300">
       <ChatHeader
         selectedConversation={selectedConversation}
         isOnline={isOnline}
@@ -1191,7 +1202,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                   isLoadingMoreRef.current = true;
                   const hasMore = await onLoadMoreMessages();
                   isLoadingMoreRef.current = false;
-                  
+
                   if (!hasMore) {
                     // Show a message that there are no more messages
                     toast.success('No more messages to load');
@@ -1205,7 +1216,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             </button>
           </div>
         )}
-        
+
         <MessageList
           messages={messages}
           favoriteMessages={favoriteMessages}
@@ -1255,29 +1266,29 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-              {/* Reply to message preview */}
-              {replyToMessage && (
-                <div className="mb-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border-l-4 border-blue-400">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">
-                        Replying to:
-                      </div>
-                      <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                        {replyToMessage.message}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setReplyToMessage(null)}
-                      className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
-                    >
-                      <X className="w-4 h-4 text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-              )}
+      {/* Reply to message preview */}
+      {replyToMessage && (
+        <div className="mb-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border-l-4 border-blue-400">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">
+                Replying to:
+              </div>
+              <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                {replyToMessage.message}
+              </div>
+            </div>
+            <button
+              onClick={() => setReplyToMessage(null)}
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+        </div>
+      )}
 
-              {/* Message Input */}
+      {/* Message Input */}
       {/* Hidden file inputs for attachments */}
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
       <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
@@ -1298,11 +1309,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
       {/* Favorites Popup - Right Side */}
       {showFavoritesPopup && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-50"
           onClick={() => setShowFavoritesPopup(false)}
         >
-          <div 
+          <div
             className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1356,21 +1367,21 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
       {/* Template Messages Popup */}
       {showTemplatePopup && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-50"
           onClick={() => {
             setShowTemplatePopup(false);
             setShowCreateTemplateForm(false);
           }}
         >
-          <div 
+          <div
             className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                  <FileText className="w-5 h-5 mr-2 text-cyan-500" />
+                  <FileText className="w-5 h-5 mr-2 text-gray-800 dark:border-white" />
                   {showCreateTemplateForm ? 'Create Template' : 'Template Messages'}
                 </h3>
                 <button
@@ -1388,7 +1399,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                 <>
                   <button
                     onClick={() => setShowCreateTemplateForm(true)}
-                    className="w-full mb-4 flex items-center justify-center space-x-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors"
+                    className="w-full mb-4 flex items-center justify-center space-x-2 px-4 py-2 bg-black dark:bg-white hover:bg-gray-900 dark:hover:bg-gray-100 text-white rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Create New Template</span>
@@ -1426,7 +1437,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                       value={newTemplateName}
                       onChange={(e) => setNewTemplateName(e.target.value)}
                       placeholder="Enter template name"
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-800 dark:border-white"
                     />
                   </div>
 
@@ -1439,7 +1450,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                       onChange={(e) => setNewTemplateContent(e.target.value)}
                       placeholder="Enter template content"
                       rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gray-800 dark:border-white resize-none"
                     />
                   </div>
 
@@ -1458,7 +1469,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                       <button
                         type="button"
                         onClick={() => templateImageInputRef.current?.click()}
-                        className="w-full flex items-center justify-center space-x-2 px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-cyan-500 transition-colors"
+                        className="w-full flex items-center justify-center space-x-2 px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-gray-800 dark:border-white transition-colors"
                       >
                         <ImageIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                         <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -1507,7 +1518,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
                     <button
                       onClick={handleCreateTemplate}
                       disabled={isCreatingTemplate || !newTemplateName.trim() || !newTemplateContent.trim()}
-                      className="flex-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 px-4 py-2 bg-black dark:bg-white hover:bg-gray-900 dark:hover:bg-gray-100 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isCreatingTemplate ? 'Creating...' : 'Create Template'}
                     </button>
@@ -1519,224 +1530,223 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         </div>
       )}
 
-              {/* Image Caption Modal */}
-              {pendingImage && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                  <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md">
-                    <div className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Add Caption</h3>
-                        <button
-                          onClick={cancelImageSend}
-                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                        >
-                          <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                        </button>
-                      </div>
+      {/* Image Caption Modal */}
+      {pendingImage && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Add Caption</h3>
+                <button
+                  onClick={cancelImageSend}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
 
-                      {/* Image Preview */}
-                      <div className="mb-4 rounded-lg overflow-hidden">
-                        <img 
-                          src={pendingImage.preview} 
-                          alt="Preview" 
-                          className="w-full h-auto max-h-64 object-contain"
-                        />
-                      </div>
-
-                      {/* Caption Input */}
-                      <div className="mb-4">
-                        <input
-                          type="text"
-                          placeholder="Add a caption (optional)..."
-                          value={imageCaption}
-                          onChange={(e) => setImageCaption(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              sendImageWithCaption();
-                            }
-                          }}
-                          className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                          autoFocus
-                        />
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={cancelImageSend}
-                          className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={sendImageWithCaption}
-                          className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-lg hover:from-cyan-600 hover:to-cyan-700 transition-all"
-                        >
-                          Send
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Forward Modal */}
-              {messageToForward && (
-                <ForwardModal
-                  isOpen={showForwardModal}
-                  onClose={() => {
-                    setShowForwardModal(false);
-                    setMessageToForward(null);
-                  }}
-                  message={messageToForward}
-                  conversations={conversations.filter(conv => conv.id !== selectedConversation?.id)}
-                  onForward={handleForward}
+              {/* Image Preview */}
+              <div className="mb-4 rounded-lg overflow-hidden">
+                <img
+                  src={pendingImage.preview}
+                  alt="Preview"
+                  className="w-full h-auto max-h-64 object-contain"
                 />
-              )}
+              </div>
 
-              {/* Reaction Picker */}
-              <ReactionPicker
-                isOpen={showReactionPicker}
-                onClose={() => {
-                  setShowReactionPicker(false);
-                  setMessageToReact(null);
-                }}
-                onSelectReaction={handleAddReaction}
-                position={reactionPickerPosition}
-              />
+              {/* Caption Input */}
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Add a caption (optional)..."
+                  value={imageCaption}
+                  onChange={(e) => setImageCaption(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      sendImageWithCaption();
+                    }
+                  }}
+                  className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-800 dark:border-white focus:border-transparent"
+                  autoFocus
+                />
+              </div>
 
-              <ChatCloseModal
-                isOpen={showCloseModal}
-                tags={availableCloseTags}
-                selectedTagId={selectedCloseTagId}
-                onSelectTag={(id) => setSelectedCloseTagId(id)}
-                onCancel={() => { setShowCloseModal(false); setSelectedCloseTagId(null); }}
-                onConfirm={handleCloseChat}
-                conversationName={selectedConversation?.name}
-              />
+              {/* Action Buttons */}
+              <div className="flex space-x-2">
+                <button
+                  onClick={cancelImageSend}
+                  className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={sendImageWithCaption}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-gray-800 dark:border-white to-black dark:bg-white text-white rounded-lg hover:from-black dark:bg-white hover:to-gray-900 dark:hover:bg-gray-100 transition-all"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* Assign User Modal */}
-              {showAssignModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-                  <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md mx-4">
-                    <div className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Assign Chat to User</h3>
-                        <button
-                          onClick={() => {
-                            setShowAssignModal(false);
-                            setSelectedUserId(null);
-                            setUserSearchTerm('');
-                          }}
-                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                        >
-                          <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                        </button>
-                      </div>
+      {/* Forward Modal */}
+      {messageToForward && (
+        <ForwardModal
+          isOpen={showForwardModal}
+          onClose={() => {
+            setShowForwardModal(false);
+            setMessageToForward(null);
+          }}
+          message={messageToForward}
+          conversations={conversations.filter(conv => conv.id !== selectedConversation?.id)}
+          onForward={handleForward}
+        />
+      )}
 
-                      {/* Search Filter */}
-                      <div className="mb-4">
-                        <div className="relative">
-                          <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+      {/* Reaction Picker */}
+      <ReactionPicker
+        isOpen={showReactionPicker}
+        onClose={() => {
+          setShowReactionPicker(false);
+          setMessageToReact(null);
+        }}
+        onSelectReaction={handleAddReaction}
+        position={reactionPickerPosition}
+      />
+
+      <ChatCloseModal
+        isOpen={showCloseModal}
+        tags={availableCloseTags}
+        selectedTagId={selectedCloseTagId}
+        onSelectTag={(id) => setSelectedCloseTagId(id)}
+        onCancel={() => { setShowCloseModal(false); setSelectedCloseTagId(null); }}
+        onConfirm={handleCloseChat}
+        conversationName={selectedConversation?.name}
+      />
+
+      {/* Assign User Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Assign Chat to User</h3>
+                <button
+                  onClick={() => {
+                    setShowAssignModal(false);
+                    setSelectedUserId(null);
+                    setUserSearchTerm('');
+                  }}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
+
+              {/* Search Filter */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={userSearchTerm}
+                    onChange={(e) => setUserSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-800 dark:border-white focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {loadingUsers ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto mb-4">
+                  {availableUsers
+                    .filter((assignUser) => {
+                      if (!userSearchTerm) return true;
+                      const searchLower = userSearchTerm.toLowerCase();
+                      const fullName = `${assignUser.firstName || ''} ${assignUser.lastName || ''}`.toLowerCase();
+                      return (
+                        assignUser.username.toLowerCase().includes(searchLower) ||
+                        assignUser.email.toLowerCase().includes(searchLower) ||
+                        fullName.includes(searchLower)
+                      );
+                    })
+                    .map((assignUser) => (
+                      <label
+                        key={assignUser.id}
+                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${selectedUserId === assignUser.id
+                          ? 'bg-gray-100 dark:bg-gray-800/20 border-2 border-gray-800 dark:border-white'
+                          : 'bg-gray-50 dark:bg-gray-800 border-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
+                      >
+                        <div className="flex items-center space-x-3 flex-1">
                           <input
-                            type="text"
-                            placeholder="Search users..."
-                            value={userSearchTerm}
-                            onChange={(e) => setUserSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                            type="radio"
+                            name="assignUser"
+                            value={assignUser.id}
+                            checked={selectedUserId === assignUser.id}
+                            onChange={() => setSelectedUserId(assignUser.id)}
+                            className="w-4 h-4 text-black dark:bg-white focus:ring-gray-800 dark:border-white focus:ring-2"
                           />
-                        </div>
-                      </div>
-
-                      {loadingUsers ? (
-                        <div className="flex items-center justify-center py-8">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 max-h-96 overflow-y-auto mb-4">
-                          {availableUsers
-                            .filter((assignUser) => {
-                              if (!userSearchTerm) return true;
-                              const searchLower = userSearchTerm.toLowerCase();
-                              const fullName = `${assignUser.firstName || ''} ${assignUser.lastName || ''}`.toLowerCase();
-                              return (
-                                assignUser.username.toLowerCase().includes(searchLower) ||
-                                assignUser.email.toLowerCase().includes(searchLower) ||
-                                fullName.includes(searchLower)
-                              );
-                            })
-                            .map((assignUser) => (
-                              <label
-                                key={assignUser.id}
-                                className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                                  selectedUserId === assignUser.id
-                                    ? 'bg-cyan-50 dark:bg-cyan-900/20 border-2 border-cyan-500'
-                                    : 'bg-gray-50 dark:bg-gray-800 border-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
-                                }`}
-                              >
-                                <div className="flex items-center space-x-3 flex-1">
-                                  <input
-                                    type="radio"
-                                    name="assignUser"
-                                    value={assignUser.id}
-                                    checked={selectedUserId === assignUser.id}
-                                    onChange={() => setSelectedUserId(assignUser.id)}
-                                    className="w-4 h-4 text-cyan-600 focus:ring-cyan-500 focus:ring-2"
-                                  />
-                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center flex-shrink-0">
-                                    <User className="w-5 h-5 text-white" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                      {assignUser.firstName && assignUser.lastName 
-                                        ? `${assignUser.firstName} ${assignUser.lastName}`
-                                        : assignUser.username}
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{assignUser.email}</p>
-                                  </div>
-                                </div>
-                              </label>
-                            ))}
-                          {availableUsers.filter((assignUser) => {
-                            if (!userSearchTerm) return true;
-                            const searchLower = userSearchTerm.toLowerCase();
-                            const fullName = `${assignUser.firstName || ''} ${assignUser.lastName || ''}`.toLowerCase();
-                            return (
-                              assignUser.username.toLowerCase().includes(searchLower) ||
-                              assignUser.email.toLowerCase().includes(searchLower) ||
-                              fullName.includes(searchLower)
-                            );
-                          }).length === 0 && (
-                            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                              {userSearchTerm ? 'No users found matching your search' : 'No users available'}
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-800 dark:border-white to-blue-500 flex items-center justify-center flex-shrink-0">
+                            <User className="w-5 h-5 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {assignUser.firstName && assignUser.lastName
+                                ? `${assignUser.firstName} ${assignUser.lastName}`
+                                : assignUser.username}
                             </p>
-                          )}
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{assignUser.email}</p>
+                          </div>
                         </div>
-                      )}
-
-                      <div className="flex space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <button
-                          onClick={() => {
-                            setShowAssignModal(false);
-                            setSelectedUserId(null);
-                            setUserSearchTerm('');
-                          }}
-                          className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={performAssignment}
-                          disabled={!selectedUserId}
-                          className="flex-1 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg text-white transition-colors font-medium"
-                        >
-                          OK
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                      </label>
+                    ))}
+                  {availableUsers.filter((assignUser) => {
+                    if (!userSearchTerm) return true;
+                    const searchLower = userSearchTerm.toLowerCase();
+                    const fullName = `${assignUser.firstName || ''} ${assignUser.lastName || ''}`.toLowerCase();
+                    return (
+                      assignUser.username.toLowerCase().includes(searchLower) ||
+                      assignUser.email.toLowerCase().includes(searchLower) ||
+                      fullName.includes(searchLower)
+                    );
+                  }).length === 0 && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        {userSearchTerm ? 'No users found matching your search' : 'No users available'}
+                      </p>
+                    )}
                 </div>
               )}
+
+              <div className="flex space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => {
+                    setShowAssignModal(false);
+                    setSelectedUserId(null);
+                    setUserSearchTerm('');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={performAssignment}
+                  disabled={!selectedUserId}
+                  className="flex-1 px-4 py-2 bg-black dark:bg-white hover:bg-gray-900 dark:hover:bg-gray-100 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg text-white transition-colors font-medium"
+                >
+                  OK
+                </button>
+              </div>
             </div>
-          );
-        };
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

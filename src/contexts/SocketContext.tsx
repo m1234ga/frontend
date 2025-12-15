@@ -122,6 +122,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const sendMessage = (message:ChatMessage) => {
     
     if (socket && user) {
+      message.phone=message.phone || message.chatId +'@g.us';
       socket.emit('send_message', message);
     }
   };

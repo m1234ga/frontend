@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import keycloak, { keycloakInitOptions } from '@/lib/keycloak';
+import { useRouter } from 'next/navigation';
+import { jwtDecode } from 'jwt-decode';
 
 interface User {
   id: string;
@@ -9,15 +10,14 @@ interface User {
   email: string;
   firstName?: string;
   lastName?: string;
-  avatar_url?: string;
+  role?: string;
   status?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  keycloak: typeof keycloak | null;
-  login: () => void;
+  login: (token: string, user: User) => void;
   logout: () => void;
   loading: boolean;
   authenticated: boolean;
@@ -26,9 +26,8 @@ interface AuthContextType {
 const defaultContext: AuthContextType = {
   user: null,
   token: null,
-  keycloak: null,
-  login: () => {},
-  logout: () => {},
+  login: () => { },
+  logout: () => { },
   loading: true,
   authenticated: false,
 };
@@ -46,130 +45,66 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
-  const [kcReady, setKcReady] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      setLoading(false);
-      return;
-    }
+    // Check for token in local storage on mount
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
 
-    const init = async () => {
+    if (storedToken) {
       try {
-        const opts = {
-          ...keycloakInitOptions,
-          silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
-          onLoad: 'check-sso' as const,
-          checkLoginIframe: false,
-          promiseType: 'native' as const,
-        };
+        const decoded: any = jwtDecode(storedToken);
+        const currentTime = Date.now() / 1000;
 
-        const res = await keycloak.init(opts);
-        setKcReady(true);
-
-        const isAuth = typeof res === 'boolean' ? res : !!keycloak.authenticated;
-
-        if (isAuth) {
-          setAuthenticated(true);
-          setToken(keycloak.token ?? null);
-          try {
-            const info = await keycloak.loadUserInfo() as Record<string, unknown>;
-            setUser({
-              id: (info.sub as string) ?? '',
-              username: (info.preferred_username as string) ?? '',
-              email: (info.email as string) ?? '',
-              firstName: (info.given_name as string) ?? '',
-              lastName: (info.family_name as string) ?? '',
-              avatar_url: undefined,
-              status: 'online',
-            });
-          } catch (e) {
-            // ignore loadUserInfo failures
-            console.warn('loadUserInfo failed', e);
-          }
+        if (decoded.exp < currentTime) {
+          // Token expired
+          logout();
         } else {
-          setAuthenticated(false);
-          setUser(null);
-          setToken(null);
+          setToken(storedToken);
+          setAuthenticated(true);
+          if (storedUser) {
+            setUser(JSON.parse(storedUser));
+          } else {
+            // Optionally fetch user from API if not in local storage
+            // For now, reconstruct from token + placeholder or just rely on what we have
+            setUser({
+              id: decoded.userId,
+              username: decoded.username,
+              email: '', // Token might not have email
+              role: decoded.role
+            });
+          }
         }
-      } catch (err) {
-        console.error('Keycloak init error', err);
-        setAuthenticated(false);
-        setUser(null);
-        setToken(null);
-      } finally {
-        setLoading(false);
+      } catch (error) {
+        console.error('Invalid token:', error);
+        logout();
       }
-    };
-
-    init();
+    }
+    setLoading(false);
   }, []);
 
-  // token refresh
-  useEffect(() => {
-    if (!authenticated || !kcReady) return;
-
-    const id = setInterval(() => {
-      keycloak
-        .updateToken(30)
-        .then((refreshed) => {
-          if (refreshed) {
-            setToken(keycloak.token ?? null);
-            sessionStorage.setItem('token', keycloak.token ?? '');
-          }
-        })
-        .catch((err) => {
-          console.warn('Token refresh failed', err);
-          // if refresh fails, clear local auth state (Keycloak may handle session)
-          setAuthenticated(false);
-          setUser(null);
-          setToken(null);
-        });
-    }, 20_000);
-
-    return () => clearInterval(id);
-  }, [authenticated, kcReady]);
-
-  const login = () => {
-    if (typeof window === 'undefined') return;
-    if (!keycloak) {
-      console.error('Keycloak instance not available');
-      return;
-    }
-
-    // if already authenticated, update local state
-    if (keycloak.authenticated) {
-      setAuthenticated(true);
-      setToken(keycloak.token ?? null);
-      return;
-    }
-
-    try {
-      // redirect to Keycloak; adjust redirectUri as needed
-      keycloak.login({ redirectUri: window.location.origin + '/chat' });
-    } catch (err) {
-      console.error('Keycloak login error', err);
-    }
+  const login = (newToken: string, newUser: User) => {
+    localStorage.setItem('token', newToken);
+    localStorage.setItem('user', JSON.stringify(newUser));
+    setToken(newToken);
+    setUser(newUser);
+    setAuthenticated(true);
+    router.push('/Chat'); // Redirect to chat after login
   };
 
   const logout = () => {
-    if (typeof window !== 'undefined' && keycloak) {
-      try {
-        keycloak.logout({ redirectUri: window.location.origin });
-      } catch (err) {
-        console.warn('Keycloak logout error', err);
-      }
-    }
-    setUser(null);
+    localStorage.setItem('token', '');
+    localStorage.setItem('user', '');
     setToken(null);
+    setUser(null);
     setAuthenticated(false);
-    sessionStorage.clear();
+    router.push('/auth');
   };
 
   const value: AuthContextType = {
     user,
     token,
-    keycloak: keycloak ?? null,
     login,
     logout,
     loading,

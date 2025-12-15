@@ -20,7 +20,21 @@ export default function RootLayout({
   const showNavbar = pathname !== '/auth' && pathname !== '/';
 
   return (
-    <html>
+    <html suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            (function() {
+              try {
+                var theme = localStorage.getItem('chat-app-theme') || 'light';
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (e) {}
+            })();
+          `
+        }} />
+      </head>
       <body className={inter.className}>
         <ThemeProvider>
           <AuthProvider>

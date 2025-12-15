@@ -16,7 +16,7 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({
   requiredRoles = ['admin', 'user-manager'],
   redirectTo = '/chat',
 }) => {
-  const { authenticated, loading, keycloak } = useAuth();
+  const { authenticated, loading, user } = useAuth();
   const router = useRouter();
   const [hasAccess, setHasAccess] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -32,23 +32,25 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({
         return;
       }
 
-      if (keycloak) {
-        const userRoles = keycloak.realmAccess?.roles || [];
-        const hasRequiredRole = requiredRoles.some(role => userRoles.includes(role));
-        
-        setHasAccess(hasRequiredRole);
-        setChecking(false);
+      const kauth = (user as any); // fallback or just check user
+      setChecking(false);
 
-        if (!hasRequiredRole) {
-          setTimeout(() => {
-            router.push(redirectTo);
-          }, 2000);
-        }
+      // Simple check based on user role
+      // Assuming user.role is a string like 'admin' or 'user'
+      const userRole = user?.role || 'user';
+      const hasRequiredRole = requiredRoles.includes(userRole);
+
+      setHasAccess(hasRequiredRole);
+
+      if (!hasRequiredRole) {
+        setTimeout(() => {
+          router.push(redirectTo);
+        }, 2000);
       }
     };
 
     checkAccess();
-  }, [authenticated, loading, keycloak, requiredRoles, redirectTo, router]);
+  }, [authenticated, loading, requiredRoles, redirectTo, router]);
 
   if (loading || checking) {
     return (

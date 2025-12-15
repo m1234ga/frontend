@@ -5,29 +5,53 @@ module.exports = {
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  darkMode: 'class', // Enable class-based dark mode
   theme: {
     extend: {
       colors: {
         background: 'var(--background)',
         foreground: 'var(--foreground)',
-        'tech-dark-blue': '#0A213D',
-        'tech-cyan': '#00CED1',
-        'tech-cyan-light': '#40E0D0',
-        'tech-white': '#FFFFFF',
-        'tech-gray': '#1a2332',
-        'tech-gray-light': '#2a3441',
+        'soft-bg': {
+          DEFAULT: '#f8fafc', // Slate 50
+          dark: '#0f172a',    // Slate 900
+        },
+        'soft-surface': {
+          DEFAULT: '#ffffff',
+          dark: '#1e293b',    // Slate 800
+        },
+        'soft-primary': {
+          DEFAULT: '#10b981', // Emerald 500
+          light: '#34d399',
+          dark: '#059669',
+        },
+        'soft-secondary': {
+          DEFAULT: '#8b5cf6', // Violet 500
+          light: '#a78bfa',
+          dark: '#7c3aed',
+        },
+        // Keeping tech colors as legacy mapping if needed, or deprecating them
+      },
+      boxShadow: {
+        'soft-sm': '0 2px 8px -2px rgba(0,0,0,0.05)',
+        'soft-md': '0 8px 24px -6px rgba(0,0,0,0.08)',
+        'soft-lg': '0 16px 48px -12px rgba(0,0,0,0.12)',
+        'soft-inner': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)',
+      },
+      borderRadius: {
+        'xl': '1rem',
+        '2xl': '1.5rem',
+        '3xl': '2rem',
       },
       animation: {
-        'pulse-cyan': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'glow': 'glow 2s ease-in-out infinite alternate',
+        'float': 'float 6s ease-in-out infinite',
       },
       keyframes: {
-        glow: {
-          '0%': { boxShadow: '0 0 5px #00CED1' },
-          '100%': { boxShadow: '0 0 20px #00CED1, 0 0 30px #00CED1' },
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
         }
       }
     },
   },
   plugins: [],
-} 
+}

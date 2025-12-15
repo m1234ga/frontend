@@ -68,7 +68,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [userSearchTerm, setUserSearchTerm] = useState('');
-  
+
   const { user, token } = useAuth();
   const chatRouter = useMemo(() => Chat(token || ""), [token]);
   const { onChatUpdate } = useSocket();
@@ -94,7 +94,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       type ChatFromApi = ChatModel & { tagsname?: string };
       type PageResult = { chats: ChatFromApi[] };
       // Call the GetChatsPage helper and use the returned `chats` array directly.
-      const pageResult = await Chat(token||"").GetChatsPage(currentPage, 25);
+      const pageResult = await Chat(token || "").GetChatsPage(currentPage, 25);
 
       // If API returned an error-shaped object, log and bail so it's visible in console
       if (pageResult && typeof pageResult === 'object' && 'error' in pageResult) {
@@ -107,23 +107,23 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       }
 
       // Extract chats array (default to empty array)
-      const chats: ChatFromApi[] = 
-        (pageResult && 
-         typeof pageResult === 'object' && 
-         'chats' in pageResult && 
-         Array.isArray((pageResult as PageResult).chats))
+      const chats: ChatFromApi[] =
+        (pageResult &&
+          typeof pageResult === 'object' &&
+          'chats' in pageResult &&
+          Array.isArray((pageResult as PageResult).chats))
           ? (pageResult as PageResult).chats!
           : [];
-      
+
       // Parse tagsname field and convert to ChatTag array
       const chatsWithParsedTags = chats.map((chat: ChatModel & { tagsname?: string }) => {
         let parsedTags: ChatTag[] = [];
-        
+
         if (chat.tagsname && typeof chat.tagsname === 'string') {
           // Split by '-_-' delimiter and create ChatTag objects
           const tagData = chat.tagsname.split('-_-').filter((data: string) => data.trim() !== '');
           parsedTags = tagData.map((data: string, index: number) => {
-            const [tagName,tagId] = data.split('_-_');
+            const [tagName, tagId] = data.split('_-_');
             return {
               id: tagId || `parsed-${chat.id}-${index}`,
               name: tagName || data.trim(),
@@ -134,13 +134,13 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             };
           });
         }
-        
+
         return {
           ...chat,
           tags: parsedTags
         };
       });
-      
+
       const toMs = (v: Date | string | number) => (v instanceof Date ? v.getTime() : new Date(v).getTime());
       const sortedChats = chatsWithParsedTags.sort(
         (a: ChatModel, b: ChatModel) => toMs(b.lastMessageTime) - toMs(a.lastMessageTime)
@@ -157,7 +157,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         });
         pageRef.current = pageRef.current + 1;
       }
-      
+
       // If we got fewer than 25 chats, there's no more data
       // Also set hasMore to false if we got 0 chats
       setHasMore(chats.length >= 25 && chats.length > 0);
@@ -175,7 +175,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   // Fetch archived chats
   const fetchArchivedChats = useCallback(async () => {
     if (!user?.id) return;
-    
+
     try {
       const archived = await chatRouter.GetArchivedChats(user.id);
       setArchivedChats(archived);
@@ -187,7 +187,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   // Fetch assigned chats
   const fetchAssignedChats = useCallback(async () => {
     if (!user?.id) return;
-    
+
     try {
       const assigned = await chatRouter.GetAssignedChats(user.id);
       setAssignedChats(assigned);
@@ -219,7 +219,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   // Archive/Unarchive chat functions
   const handleArchiveChat = async (chatId: string) => {
     if (!user?.id) return;
-    
+
     try {
       await chatRouter.ArchiveChat(chatId, user.id);
       fetchArchivedChats();
@@ -231,7 +231,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const handleUnarchiveChat = async (chatId: string) => {
     if (!user?.id) return;
-    
+
     try {
       await chatRouter.UnarchiveChat(chatId, user.id);
       fetchArchivedChats();
@@ -244,7 +244,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   // Mute/Unmute chat functions
   const handleMuteChat = async (chatId: string) => {
     if (!user?.id) return;
-    
+
     try {
       await chatRouter.MuteChat(chatId, user.id);
       fetchConversations();
@@ -255,7 +255,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const handleUnmuteChat = async (chatId: string) => {
     if (!user?.id) return;
-    
+
     try {
       await chatRouter.UnmuteChat(chatId, user.id);
       fetchConversations();
@@ -272,10 +272,10 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/CreateNewChat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          phoneNumber, 
-          contactName, 
-          userId: user.id 
+        body: JSON.stringify({
+          phoneNumber,
+          contactName,
+          userId: user.id
         })
       });
 
@@ -360,7 +360,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     setConversations(prevConversations => {
       const existingIndex = prevConversations.findIndex(chat => chat.id === updatedChat.id);
       let newConversations;
-      
+
       // Parse tagsname field for the updated chat
       let parsedTags: ChatTag[] = [];
       if (updatedChat.tagsname && typeof updatedChat.tagsname === 'string') {
@@ -374,7 +374,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           updatedAt: new Date()
         }));
       }
-      
+
       if (existingIndex >= 0) {
         // Update existing conversation
         newConversations = [...prevConversations];
@@ -396,13 +396,13 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           tags: parsedTags
         }, ...prevConversations];
       }
-      
+
       // Sort by last message time
       const toMs = (v: Date | string | number) => (v instanceof Date ? v.getTime() : new Date(v).getTime());
       const sortedConversations = newConversations.sort(
         (a: ChatModel, b: ChatModel) => toMs(b.lastMessageTime) - toMs(a.lastMessageTime)
       );
-      
+
       return sortedConversations;
     });
   }, []);
@@ -448,7 +448,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     if (hasMore) {
       el.addEventListener('scroll', onScroll);
     }
-    
+
     return () => {
       el.removeEventListener('scroll', onScroll);
     };
@@ -486,11 +486,11 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const filteredConversations = useMemo(() => {
     if (!isClient) return []; // Prevent hydration mismatch
-    
+
     let filtered = conversations.filter(conversation => {
-      if(conversation.name) {
+      if (conversation.name) {
         return conversation.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        conversation.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase());
+          conversation.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase());
       }
       return true;
     });
@@ -569,8 +569,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
     if (diffInHours < 24) {
-      return date.toLocaleTimeString('en-US', { 
-        hour: '2-digit', 
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
         minute: '2-digit',
         timeZone: timezone
       });
@@ -589,8 +589,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   // Bulk message functions
   const toggleContactSelection = (contactId: string) => {
-    setSelectedContacts(prev => 
-      prev.includes(contactId) 
+    setSelectedContacts(prev =>
+      prev.includes(contactId)
         ? prev.filter(id => id !== contactId)
         : [...prev, contactId]
     );
@@ -611,7 +611,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       // Here you would implement the bulk message sending logic
       // For now, we'll just show an alert
       alert(`Sending message to ${selectedContacts.length} contacts: "${bulkMessage}"`);
-      
+
       // Reset form
       setBulkMessage('');
       setSelectedContacts([]);
@@ -628,7 +628,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       const formattedTags: ChatTag[] = dbTags.map((tag: { tagId: number; tagName: string }) => ({
         id: tag.tagId.toString(),
         name: tag.tagName,
-        color:"black",
+        color: "black",
         status: 'available' as const,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -686,7 +686,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const handleCreateTag = async () => {
     if (!newTagName.trim()) return;
-    
+
     setIsCreatingTag(true);
     try {
       await addTag(newTagName.trim());
@@ -704,15 +704,15 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const assignTagToContact = async (contactId: string, tagId: string) => {
     const contact = Contacts.find(c => c.id === contactId);
     if (!contact) return;
-    
+
     const tag = availableTags.find(t => t.id === tagId);
     if (!tag || contact.tags?.some(t => t.id === tagId)) return;
-    
+
     const updatedTags = [...(contact.tags || []), tag];
-    
+
     try {
       await chatRouter.UpdateContactTags(contactId, updatedTags.map(t => t.id));
-      setAllContacts(prev => 
+      setAllContacts(prev =>
         prev.map(c => c.id === contactId ? { ...c, tags: updatedTags } : c)
       );
     } catch (error) {
@@ -723,12 +723,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const removeTagFromContact = async (contactId: string, tagId: string) => {
     const contact = Contacts.find(c => c.id === contactId);
     if (!contact) return;
-    
+
     const updatedTags = contact.tags?.filter(tag => tag.id !== tagId) || [];
-    
+
     try {
       await chatRouter.UpdateContactTags(contactId, updatedTags.map(t => t.id));
-      setAllContacts(prev => 
+      setAllContacts(prev =>
         prev.map(c => c.id === contactId ? { ...c, tags: updatedTags } : c)
       );
     } catch (error) {
@@ -752,7 +752,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const assignTagToChat = async (chatId: string, tagId: string) => {
     try {
       await chatRouter.AssignTagToChat(chatId, tagId, user?.username || 'current_user');
-      
+
       await fetchConversations();
     } catch (error) {
       console.error('Error assigning tag to chat:', error);
@@ -762,7 +762,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const removeTagFromChat = async (chatId: string, tagId: string) => {
     try {
       await chatRouter.RemoveTagFromChat(chatId, tagId);
-      
+
       // Refresh conversations to get updated tags
       await fetchConversations();
     } catch (error) {
@@ -821,22 +821,22 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   <MoreVertical className="w-5 h-5 theme-text-accent" />
                 </button>
                 {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10">
-                  <a
-                    href="/dashboard"
-                    className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left transition-colors"
-                  >
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    Dashboard
-                  </a>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left transition-colors"
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Logout
-                  </button>
-                </div>
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10">
+                    <a
+                      href="/dashboard"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left transition-colors"
+                    >
+                      <BarChart3 className="w-4 h-4 mr-2" />
+                      Dashboard
+                    </a>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left transition-colors"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Logout
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -856,7 +856,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               onClick={() => {
                 try {
                   window.dispatchEvent(new CustomEvent('openTemplates'));
-                } catch {}
+                } catch { }
               }}
               className="flex items-center space-x-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
               title="New Message Template"
@@ -887,11 +887,10 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               />
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${
-                  showFilters || filters.unreadOnly || filters.onlineOnly || filters.dateFilter !== 'all' || filters.sortBy !== 'date'
-                    ? 'bg-cyan-500 text-white'
-                    : 'theme-text-accent hover:bg-gray-500/20'
-                }`}
+                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${showFilters || filters.unreadOnly || filters.onlineOnly || filters.dateFilter !== 'all' || filters.sortBy !== 'date'
+                  ? 'bg-cyan-500 text-white'
+                  : 'theme-text-accent hover:bg-gray-500/20'
+                  }`}
                 title="Toggle Filters"
               >
                 <SlidersHorizontal className="w-4 h-4" />
@@ -907,22 +906,20 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, unreadOnly: !prev.unreadOnly }))}
-                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.unreadOnly
-                          ? 'bg-cyan-500 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.unreadOnly
+                        ? 'bg-cyan-500 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       <Mail className="w-3 h-3" />
                       <span>Unread Only</span>
                     </button>
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, onlineOnly: !prev.onlineOnly }))}
-                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.onlineOnly
-                          ? 'bg-green-500 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.onlineOnly
+                        ? 'bg-green-500 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       <Users className="w-3 h-3" />
                       <span>Online Only</span>
@@ -939,31 +936,28 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, sortBy: 'date' }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.sortBy === 'date'
-                          ? 'bg-gray-800 dark:bg-gray-600 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.sortBy === 'date'
+                        ? 'bg-gray-800 dark:bg-gray-600 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       Recent
                     </button>
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, sortBy: 'name' }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.sortBy === 'name'
-                          ? 'bg-gray-800 dark:bg-gray-600 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.sortBy === 'name'
+                        ? 'bg-gray-800 dark:bg-gray-600 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       Name
                     </button>
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, sortBy: 'unread' }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.sortBy === 'unread'
-                          ? 'bg-gray-800 dark:bg-gray-600 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.sortBy === 'unread'
+                        ? 'bg-gray-800 dark:bg-gray-600 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       Unread
                     </button>
@@ -979,51 +973,46 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, dateFilter: 'all' }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.dateFilter === 'all'
-                          ? 'bg-gray-800 dark:bg-gray-600 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.dateFilter === 'all'
+                        ? 'bg-gray-800 dark:bg-gray-600 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       All Time
                     </button>
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, dateFilter: 'today' }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.dateFilter === 'today'
-                          ? 'bg-gray-800 dark:bg-gray-600 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.dateFilter === 'today'
+                        ? 'bg-gray-800 dark:bg-gray-600 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       Today
                     </button>
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, dateFilter: 'yesterday' }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.dateFilter === 'yesterday'
-                          ? 'bg-gray-800 dark:bg-gray-600 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.dateFilter === 'yesterday'
+                        ? 'bg-gray-800 dark:bg-gray-600 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       Yesterday
                     </button>
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, dateFilter: 'week' }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.dateFilter === 'week'
-                          ? 'bg-gray-800 dark:bg-gray-600 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.dateFilter === 'week'
+                        ? 'bg-gray-800 dark:bg-gray-600 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       Last 7 Days
                     </button>
                     <button
                       onClick={() => setFilters(prev => ({ ...prev, dateFilter: 'month' }))}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        filters.dateFilter === 'month'
-                          ? 'bg-gray-800 dark:bg-gray-600 text-white'
-                          : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filters.dateFilter === 'month'
+                        ? 'bg-gray-800 dark:bg-gray-600 text-white'
+                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-primary'
+                        }`}
                     >
                       Last Month
                     </button>
@@ -1053,51 +1042,46 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           <div className="flex border-b theme-border-primary overflow-x-auto">
             <button
               onClick={() => setActiveTab('chats')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'chats'
-                  ? 'theme-text-primary border-b-2 border-cyan-500'
-                  : 'theme-text-secondary hover:theme-text-primary'
-              }`}
+              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'chats'
+                ? 'theme-text-primary border-b-2 border-cyan-500'
+                : 'theme-text-secondary hover:theme-text-primary'
+                }`}
             >
               All
             </button>
             <button
               onClick={() => setActiveTab('open')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'open'
-                  ? 'theme-text-primary border-b-2 border-cyan-500'
-                  : 'theme-text-secondary hover:theme-text-primary'
-              }`}
+              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'open'
+                ? 'theme-text-primary border-b-2 border-cyan-500'
+                : 'theme-text-secondary hover:theme-text-primary'
+                }`}
             >
               Open
             </button>
             <button
               onClick={() => setActiveTab('closed')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'closed'
-                  ? 'theme-text-primary border-b-2 border-cyan-500'
-                  : 'theme-text-secondary hover:theme-text-primary'
-              }`}
+              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'closed'
+                ? 'theme-text-primary border-b-2 border-cyan-500'
+                : 'theme-text-secondary hover:theme-text-primary'
+                }`}
             >
               Closed
             </button>
             <button
               onClick={() => setActiveTab('archived')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'archived'
-                  ? 'theme-text-primary border-b-2 border-cyan-500'
-                  : 'theme-text-secondary hover:theme-text-primary'
-              }`}
+              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'archived'
+                ? 'theme-text-primary border-b-2 border-cyan-500'
+                : 'theme-text-secondary hover:theme-text-primary'
+                }`}
             >
               Archived
             </button>
             <button
               onClick={() => setActiveTab('assigned')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'assigned'
-                  ? 'theme-text-primary border-b-2 border-cyan-500'
-                  : 'theme-text-secondary hover:theme-text-primary'
-              }`}
+              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'assigned'
+                ? 'theme-text-primary border-b-2 border-cyan-500'
+                : 'theme-text-secondary hover:theme-text-primary'
+                }`}
             >
               Assigned
             </button>
@@ -1122,12 +1106,11 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   <button
                     key={tag.id}
                     onClick={() => toggleTagFilter(tag.id)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      selectedTagFilter === tag.id
-                        ? 'bg-gray-800 text-white'
-                        : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-secondary'
-                    }`}
-                    style={{ 
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${selectedTagFilter === tag.id
+                      ? 'bg-gray-800 text-white'
+                      : 'theme-bg-tertiary theme-text-secondary hover:theme-bg-secondary'
+                      }`}
+                    style={{
                       backgroundColor: selectedTagFilter === tag.id ? tag.color : undefined,
                       borderColor: tag.color,
                       borderWidth: '1px'
@@ -1135,9 +1118,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   >
                     <Tag className="w-3 h-3 inline mr-1" />
                     {tag.name}
-                    <span className={`ml-1 text-xs ${
-                      tag.status === 'available' ? 'text-green-400' : 'text-orange-400'
-                    }`}>
+                    <span className={`ml-1 text-xs ${tag.status === 'available' ? 'text-green-400' : 'text-orange-400'
+                      }`}>
                       {tag.status === 'available' ? '●' : '●'}
                     </span>
                   </button>
@@ -1150,33 +1132,29 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           <div className="flex border-b theme-border-primary">
             <button
               onClick={() => { setActiveTab('chats'); setShowUsersList(false); }}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'chats' && !showUsersList ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
-              }`}
+              className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'chats' && !showUsersList ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
+                }`}
             >
               Chats
             </button>
             <button
               onClick={() => { setActiveTab('archived'); setShowUsersList(false); }}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'archived' ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
-              }`}
+              className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'archived' ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
+                }`}
             >
               Archived
             </button>
             <button
               onClick={() => { setActiveTab('assigned'); setShowUsersList(false); }}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'assigned' ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
-              }`}
+              className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'assigned' ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
+                }`}
             >
               Assigned
             </button>
             <button
               onClick={() => setShowUsersList(true)}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${
-                showUsersList ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
-              }`}
+              className={`flex-1 py-3 text-sm font-medium transition-colors ${showUsersList ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
+                }`}
             >
               Contacts
             </button>
@@ -1231,12 +1209,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   if (currentConversations.length === 0) {
                     return (
                       <div className="p-4 text-center theme-text-accent">
-                        {searchTerm ? 'No conversations found' : 
-                         activeTab === 'open' ? 'No open conversations' :
-                         activeTab === 'closed' ? 'No closed conversations' :
-                         activeTab === 'archived' ? 'No archived conversations' :
-                         activeTab === 'assigned' ? 'No assigned conversations' :
-                         'No conversations yet'}
+                        {searchTerm ? 'No conversations found' :
+                          activeTab === 'open' ? 'No open conversations' :
+                            activeTab === 'closed' ? 'No closed conversations' :
+                              activeTab === 'archived' ? 'No archived conversations' :
+                                activeTab === 'assigned' ? 'No assigned conversations' :
+                                  'No conversations yet'}
                       </div>
                     );
                   }
@@ -1279,7 +1257,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                       className="p-4 border-b theme-border-primary hover:theme-bg-secondary transition-colors"
                     >
                       <div className="flex items-center space-x-3">
-                        <div 
+                        <div
                           onClick={() => onNewChat()}
                           className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-full flex items-center justify-center shadow-md cursor-pointer"
                         >
@@ -1287,7 +1265,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                         </div>
                         <div className="flex-1 min-w-0 overflow-visible">
                           <div className="flex items-center justify-between">
-                            <h3 
+                            <h3
                               onClick={() => onNewChat()}
                               className="text-sm font-medium theme-text-primary truncate cursor-pointer"
                             >
@@ -1304,7 +1282,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                               <Tag className="w-4 h-4 theme-text-accent" />
                             </button>
                           </div>
-                          <p 
+                          <p
                             onClick={() => onNewChat()}
                             className="text-sm theme-text-secondary truncate cursor-pointer"
                           >
@@ -1359,90 +1337,88 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     </button>
                   </div>
 
-                <div className="space-y-4">
-                  {/* Message Input */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Message
-                    </label>
-                    <textarea
-                      value={bulkMessage}
-                      onChange={(e) => setBulkMessage(e.target.value)}
-                      placeholder="Type your message here..."
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none"
-                      rows={4}
-                    />
-                  </div>
-
-                  {/* Contact Selection */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Select Contacts ({selectedContacts.length} selected)
+                  <div className="space-y-4">
+                    {/* Message Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Message
                       </label>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={selectAllContacts}
-                          className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-900 rounded text-white transition-colors"
-                        >
-                          Select All
-                        </button>
-                        <button
-                          onClick={clearSelection}
-                          className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded text-gray-900 dark:text-white transition-colors"
-                        >
-                          Clear
-                        </button>
-                      </div>
+                      <textarea
+                        value={bulkMessage}
+                        onChange={(e) => setBulkMessage(e.target.value)}
+                        placeholder="Type your message here..."
+                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none"
+                        rows={4}
+                      />
                     </div>
-                    
-                    <div className="max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg">
-                      {Contacts.map((contact) => (
-                        <div
-                          key={contact.id}
-                          className={`p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${
-                            selectedContacts.includes(contact.id) ? 'bg-gray-500/20' : ''
-                          }`}
-                          onClick={() => toggleContactSelection(contact.id)}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className={`w-4 h-4 border-2 rounded ${
-                              selectedContacts.includes(contact.id) 
-                                ? 'bg-gray-800 border-gray-800' 
+
+                    {/* Contact Selection */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Select Contacts ({selectedContacts.length} selected)
+                        </label>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={selectAllContacts}
+                            className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-900 rounded text-white transition-colors"
+                          >
+                            Select All
+                          </button>
+                          <button
+                            onClick={clearSelection}
+                            className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded text-gray-900 dark:text-white transition-colors"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg">
+                        {Contacts.map((contact) => (
+                          <div
+                            key={contact.id}
+                            className={`p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${selectedContacts.includes(contact.id) ? 'bg-gray-500/20' : ''
+                              }`}
+                            onClick={() => toggleContactSelection(contact.id)}
+                          >
+                            <div className="flex items-center space-x-3">
+                              <div className={`w-4 h-4 border-2 rounded ${selectedContacts.includes(contact.id)
+                                ? 'bg-gray-800 border-gray-800'
                                 : 'border-gray-400'
-                            }`}>
-                              {selectedContacts.includes(contact.id) && (
-                                <div className="w-full h-full bg-white rounded-sm scale-50"></div>
-                              )}
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{contact.name}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{contact.phone}</p>
+                                }`}>
+                                {selectedContacts.includes(contact.id) && (
+                                  <div className="w-full h-full bg-white rounded-sm scale-50"></div>
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">{contact.name}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{contact.phone}</p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex space-x-3 pt-4">
+                      <button
+                        onClick={() => setShowBulkMessage(false)}
+                        className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={sendBulkMessage}
+                        disabled={!bulkMessage.trim() || selectedContacts.length === 0}
+                        className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white transition-colors flex items-center justify-center space-x-2"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span>Send to {selectedContacts.length}</span>
+                      </button>
                     </div>
                   </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex space-x-3 pt-4">
-                    <button
-                      onClick={() => setShowBulkMessage(false)}
-                      className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={sendBulkMessage}
-                      disabled={!bulkMessage.trim() || selectedContacts.length === 0}
-                      className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white transition-colors flex items-center justify-center space-x-2"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>Send to {selectedContacts.length}</span>
-                    </button>
-                  </div>
-                </div>
                 </div>
               </div>
             </div>
@@ -1465,73 +1441,73 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     </button>
                   </div>
 
-                <div className="space-y-4">
-                  {/* Current Tags */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Current Tags</h4>
-                    {selectedContactForTags.tags && selectedContactForTags.tags.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedContactForTags.tags.map((tag) => (
-                          <div
-                            key={tag.id}
-                            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium text-white"
-                            style={{ backgroundColor: tag.color }}
-                          >
-                            {tag.name}
-                            <button
-                              onClick={() => removeTagFromContact(selectedContactForTags.id, tag.id)}
-                              className="ml-2 hover:bg-black/20 rounded-full p-0.5"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">No tags assigned</p>
-                    )}
-                  </div>
-
-                  {/* Available Tags */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Available Tags</h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {availableTags
-                        .filter(tag => !selectedContactForTags.tags?.some(t => t.id === tag.id))
-                        .map((tag) => (
-                        <div
-                          key={tag.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                          onClick={() => assignTagToContact(selectedContactForTags.id, tag.id)}
-                        >
-                          <div className="flex items-center space-x-3">
+                  <div className="space-y-4">
+                    {/* Current Tags */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Current Tags</h4>
+                      {selectedContactForTags.tags && selectedContactForTags.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedContactForTags.tags.map((tag) => (
                             <div
-                              className="w-4 h-4 rounded-full"
+                              key={tag.id}
+                              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium text-white"
                               style={{ backgroundColor: tag.color }}
-                            ></div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{tag.name}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{tag.status}</p>
+                            >
+                              {tag.name}
+                              <button
+                                onClick={() => removeTagFromContact(selectedContactForTags.id, tag.id)}
+                                className="ml-2 hover:bg-black/20 rounded-full p-0.5"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
                             </div>
-                          </div>
-                          <button className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
-                            <Tag className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                          </button>
+                          ))}
                         </div>
-                      ))}
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">No tags assigned</p>
+                      )}
+                    </div>
+
+                    {/* Available Tags */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Available Tags</h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {availableTags
+                          .filter(tag => !selectedContactForTags.tags?.some(t => t.id === tag.id))
+                          .map((tag) => (
+                            <div
+                              key={tag.id}
+                              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              onClick={() => assignTagToContact(selectedContactForTags.id, tag.id)}
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div
+                                  className="w-4 h-4 rounded-full"
+                                  style={{ backgroundColor: tag.color }}
+                                ></div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">{tag.name}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{tag.status}</p>
+                                </div>
+                              </div>
+                              <button className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
+                                <Tag className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex space-x-3 pt-4">
+                      <button
+                        onClick={() => setShowContactTagManager(false)}
+                        className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
+                      >
+                        Close
+                      </button>
                     </div>
                   </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex space-x-3 pt-4">
-                    <button
-                      onClick={() => setShowContactTagManager(false)}
-                      className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
                 </div>
               </div>
             </div>
@@ -1552,82 +1528,82 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     </button>
                   </div>
 
-                <div className="space-y-4">
-                  {/* Add New Tag */}
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Add New Tag</h4>
-                    <div className="space-y-3">
-                      <input
-                        type="text"
-                        placeholder="Tag name"
-                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        id="newTagName"
-                      />
-                      <button
-                        onClick={async () => {
-                          const name = (document.getElementById('newTagName') as HTMLInputElement)?.value;
-                          if (name) {
-                            try {
-                              await addTag(name);
-                              (document.getElementById('newTagName') as HTMLInputElement).value = '';
-                            } catch (error) {
-                              console.error('Failed to create tag:', error);
+                  <div className="space-y-4">
+                    {/* Add New Tag */}
+                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Add New Tag</h4>
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          placeholder="Tag name"
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          id="newTagName"
+                        />
+                        <button
+                          onClick={async () => {
+                            const name = (document.getElementById('newTagName') as HTMLInputElement)?.value;
+                            if (name) {
+                              try {
+                                await addTag(name);
+                                (document.getElementById('newTagName') as HTMLInputElement).value = '';
+                              } catch (error) {
+                                console.error('Failed to create tag:', error);
+                              }
                             }
-                          }
-                        }}
-                        className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
+                          }}
+                          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
+                        >
+                          Add Tag
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Existing Tags */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Existing Tags</h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {availableTags.map((tag) => (
+                          <div key={tag.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <div
+                                className="w-4 h-4 rounded-full"
+                                style={{ backgroundColor: tag.color }}
+                              ></div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">{tag.name}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{tag.status}</p>
+                              </div>
+                            </div>
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await deleteTag(tag.id);
+                                  } catch (error) {
+                                    console.error('Failed to delete tag:', error);
+                                  }
+                                }}
+                                className="p-1 hover:bg-red-100 dark:hover:bg-red-900/50 rounded transition-colors"
+                                title="Delete"
+                              >
+                                <X className="w-3 h-3 text-red-500 dark:text-red-400" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex space-x-3 pt-4">
+                      <button
+                        onClick={() => setShowTagManagement(false)}
+                        className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
                       >
-                        Add Tag
+                        Close
                       </button>
                     </div>
                   </div>
-
-                  {/* Existing Tags */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Existing Tags</h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {availableTags.map((tag) => (
-                        <div key={tag.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                          <div className="flex items-center space-x-3">
-                            <div
-                              className="w-4 h-4 rounded-full"
-                              style={{ backgroundColor: tag.color }}
-                            ></div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-white">{tag.name}</p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{tag.status}</p>
-                            </div>
-                          </div>
-                          <div className="flex space-x-1">
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await deleteTag(tag.id);
-                                } catch (error) {
-                                  console.error('Failed to delete tag:', error);
-                                }
-                              }}
-                              className="p-1 hover:bg-red-100 dark:hover:bg-red-900/50 rounded transition-colors"
-                              title="Delete"
-                            >
-                              <X className="w-3 h-3 text-red-500 dark:text-red-400" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex space-x-3 pt-4">
-                    <button
-                      onClick={() => setShowTagManagement(false)}
-                      className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
                 </div>
               </div>
             </div>
@@ -1684,26 +1660,26 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                         {availableTags
                           .filter(tag => !selectedChatForTags.tags?.some(t => t.id === tag.id))
                           .map((tag) => (
-                          <div
-                            key={tag.id}
-                            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                            onClick={() => assignTagToChat(selectedChatForTags.id, tag.id)}
-                          >
-                            <div className="flex items-center space-x-3">
-                              <div
-                                className="w-4 h-4 rounded-full"
-                                style={{ backgroundColor: tag.color }}
-                              ></div>
-                              <div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">{tag.name}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{tag.status}</p>
+                            <div
+                              key={tag.id}
+                              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              onClick={() => assignTagToChat(selectedChatForTags.id, tag.id)}
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div
+                                  className="w-4 h-4 rounded-full"
+                                  style={{ backgroundColor: tag.color }}
+                                ></div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">{tag.name}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">{tag.status}</p>
+                                </div>
                               </div>
+                              <button className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
+                                <Tag className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                              </button>
                             </div>
-                            <button className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
-                              <Tag className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                            </button>
-                          </div>
-                        ))}
+                          ))}
                       </div>
                     </div>
 
@@ -1722,11 +1698,11 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             </div>
           )}
 
-           {/* Create Tag Side Dialog */}
-           {showCreateTagDialog && (
-             <div className="fixed inset-0 bg-black/50 z-50">
-               <div className="absolute left-0 top-0 h-full w-full bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto">
-                 <div className="p-6">
+          {/* Create Tag Side Dialog */}
+          {showCreateTagDialog && (
+            <div className="fixed inset-0 bg-black/50 z-50">
+              <div className="absolute left-0 top-0 h-full w-full bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto">
+                <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create New Tag</h3>
                     <button
@@ -1740,54 +1716,54 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     </button>
                   </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Tag Name
-                    </label>
-                    <input
-                      type="text"
-                      value={newTagName}
-                      onChange={(e) => setNewTagName(e.target.value)}
-                      placeholder="Enter tag name..."
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleCreateTag();
-                        }
-                      }}
-                    />
-                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Tag Name
+                      </label>
+                      <input
+                        type="text"
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        placeholder="Enter tag name..."
+                        className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            handleCreateTag();
+                          }
+                        }}
+                      />
+                    </div>
 
-                  <div className="flex space-x-3 pt-4">
-                    <button
-                      onClick={() => {
-                        setShowCreateTagDialog(false);
-                        setNewTagName('');
-                      }}
-                      className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleCreateTag}
-                      disabled={!newTagName.trim() || isCreatingTag}
-                      className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white transition-colors flex items-center justify-center space-x-2"
-                    >
-                      {isCreatingTag ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          <span>Creating...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Tag className="w-4 h-4" />
-                          <span>Create Tag</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex space-x-3 pt-4">
+                      <button
+                        onClick={() => {
+                          setShowCreateTagDialog(false);
+                          setNewTagName('');
+                        }}
+                        className="flex-1 px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateTag}
+                        disabled={!newTagName.trim() || isCreatingTag}
+                        className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-300 dark:disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white transition-colors flex items-center justify-center space-x-2"
+                      >
+                        {isCreatingTag ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Creating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Tag className="w-4 h-4" />
+                            <span>Create Tag</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
                 </div>
               </div>
             </div>
@@ -1849,11 +1825,10 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     .map((assignUser) => (
                       <label
                         key={assignUser.id}
-                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
-                          selectedUserId === assignUser.id
-                            ? 'bg-cyan-50 dark:bg-cyan-900/20 border-2 border-cyan-500'
-                            : 'bg-gray-50 dark:bg-gray-800 border-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
-                        }`}
+                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${selectedUserId === assignUser.id
+                          ? 'bg-cyan-50 dark:bg-cyan-900/20 border-2 border-cyan-500'
+                          : 'bg-gray-50 dark:bg-gray-800 border-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
                       >
                         <div className="flex items-center space-x-3 flex-1">
                           <input
@@ -1869,7 +1844,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                              {assignUser.firstName && assignUser.lastName 
+                              {assignUser.firstName && assignUser.lastName
                                 ? `${assignUser.firstName} ${assignUser.lastName}`
                                 : assignUser.username}
                             </p>
@@ -1888,10 +1863,10 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                       fullName.includes(searchLower)
                     );
                   }).length === 0 && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                      {userSearchTerm ? 'No users found matching your search' : 'No users available'}
-                    </p>
-                  )}
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        {userSearchTerm ? 'No users found matching your search' : 'No users available'}
+                      </p>
+                    )}
                 </div>
               )}
 

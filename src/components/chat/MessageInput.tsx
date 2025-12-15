@@ -29,8 +29,8 @@ const MessageInput: React.FC<MessageInputProps> = ({ newMessage, onChange, onSen
     <div className="tech-header p-4">
       <div className="flex items-center space-x-2">
         <button className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"><Smile className="w-5 h-5 theme-text-accent" /></button>
-  <button onClick={onAttachImage} className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"><ImageIcon className="w-5 h-5 text-cyan-300" aria-hidden="true"/></button>
-        <button onClick={onAttachVideo} className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"><Video className="w-5 h-5 text-cyan-300" /></button>
+        <button onClick={onAttachImage} className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"><ImageIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" aria-hidden="true" /></button>
+        <button onClick={onAttachVideo} className="p-2 hover:bg-gray-500/20 rounded-full transition-colors"><Video className="w-5 h-5 text-gray-600 dark:text-gray-300" /></button>
         <button
           onMouseDown={onStartRecording}
           onMouseUp={onStopRecording}
@@ -45,16 +45,16 @@ const MessageInput: React.FC<MessageInputProps> = ({ newMessage, onChange, onSen
         </button>
         <button onClick={onToggleTempMessages} className="p-2 hover:bg-gray-500/20 rounded-full transition-colors" title="Drafts">Drafts</button>
         <div className="flex-1">
-          <input 
-            type="text" 
-            value={newMessage} 
-            onChange={(e) => onChange(e.target.value)} 
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..." 
-            className="chat-input w-full px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent placeholder-gray-400" 
+            placeholder="Type a message..."
+            className="chat-input w-full px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-gray-400 dark:focus:ring-gray-500 focus:border-transparent placeholder-gray-400"
           />
         </div>
-        <button onClick={onSend} disabled={!newMessage.trim()} className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-full hover:from-cyan-600 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"><Send className="w-5 h-5" /></button>
+        <button onClick={onSend} disabled={!newMessage.trim()} className="p-2 bg-black dark:bg-white text-white dark:text-black rounded-full hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"><Send className="w-5 h-5" /></button>
       </div>
     </div>
   );

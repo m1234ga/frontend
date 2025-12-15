@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { User, Check, XCircle, UserPlus } from 'lucide-react';
+import { User, Check, XCircle, UserPlus, Star } from 'lucide-react';
 import { Chat } from '@shared/Models';
 
 interface ChatHeaderProps {
@@ -17,50 +17,64 @@ interface ChatHeaderProps {
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline, typingUsers, chatStatus, onAssignClick, onStatusClick, favoriteCount, onFavoritesClick }) => {
   return (
-    <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
-      <div className="px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-4 flex-1">
-          <div className="relative">
-            <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center shadow-md">
-              <User className="w-6 h-6 text-white" />
-            </div>
-            {isOnline && (
-              <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></div>
+    <div className="glass-panel sticky top-0 z-30 mb-2 mx-4 mt-2 px-6 py-4 flex items-center justify-between">
+      <div className="flex items-center space-x-4 flex-1">
+        <div className="relative">
+          <div className="w-12 h-12 bg-gradient-to-br from-soft-primary to-soft-primary-light rounded-2xl flex items-center justify-center shadow-soft-md transform transition-transform hover:rotate-3">
+            <User className="w-6 h-6 text-white" />
+          </div>
+          {isOnline && (
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white dark:border-slate-800 rounded-full animate-bounce-subtle"></div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center space-x-2">
+            <h2 className="font-bold text-gray-900 dark:text-white text-lg truncate tracking-tight">{selectedConversation.name}</h2>
+            {selectedConversation.unreadCount > 0 && (
+              <span className="bg-soft-primary text-white text-xs rounded-full px-2 py-0.5 font-bold shadow-soft-sm">{selectedConversation.unreadCount}</span>
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-2">
-              <h2 className="font-semibold text-gray-900 dark:text-white text-lg truncate">{selectedConversation.name}</h2>
-              {selectedConversation.unreadCount > 0 && (
-                <span className="bg-red-500 text-white text-xs rounded-full px-2 py-0.5 font-medium">{selectedConversation.unreadCount}</span>
-              )}
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {typingUsers.size > 0 ? (
-                <span className="text-cyan-600 dark:text-cyan-400 italic">typing...</span>
-              ) : isOnline ? (
-                <span className="flex items-center"><span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>Online</span>
-              ) : (
-                <span className="flex items-center"><span className="w-2 h-2 bg-gray-400 rounded-full mr-2"></span>Offline</span>
-              )}
-            </p>
-          </div>
+          <p className="text-sm font-medium">
+            {typingUsers.size > 0 ? (
+              <span className="text-soft-primary animate-pulse">typing...</span>
+            ) : isOnline ? (
+              <span className="text-emerald-500 flex items-center gap-1.5"><span className="w-2 h-2 bg-emerald-500 rounded-full"></span>Online</span>
+            ) : (
+              <span className="text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 bg-gray-300 rounded-full"></span>Offline</span>
+            )}
+          </p>
         </div>
+      </div>
 
-        <div className="flex items-center space-x-2">
-          <button onClick={onAssignClick} className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 hover:border-purple-500/30" title="Assign to User"><UserPlus className="w-4 h-4" /><span className="hidden md:inline">Assign</span></button>
+      <div className="flex items-center space-x-3">
+        <button onClick={onAssignClick} className="soft-button bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-300 flex items-center gap-2" title="Assign to User">
+          <UserPlus className="w-4 h-4" />
+          <span className="hidden md:inline">Assign</span>
+        </button>
 
-          <button onClick={onStatusClick} className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${chatStatus === 'closed' ? 'bg-green-500/10 text-green-600' : 'bg-cyan-500/10 text-cyan-600'}`} title={`Chat is ${chatStatus}. Click to ${chatStatus === 'open' ? 'close' : 'reopen'}`}>
-            {chatStatus === 'closed' ? (<><Check className="w-4 h-4" /><span className="hidden md:inline">Closed</span></>) : (<><XCircle className="w-4 h-4" /><span className="hidden md:inline">Open</span></>)}
-          </button>
+        <button
+          onClick={onStatusClick}
+          className={`soft-button flex items-center gap-2 ${chatStatus === 'closed'
+            ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300'
+            : 'bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300'
+            }`}
+          title={`Chat is ${chatStatus}. Click to ${chatStatus === 'open' ? 'close' : 'reopen'}`}
+        >
+          {chatStatus === 'closed' ? (
+            <><Check className="w-4 h-4" /><span className="hidden md:inline">Closed</span></>
+          ) : (
+            <><XCircle className="w-4 h-4" /><span className="hidden md:inline">Close</span></>
+          )}
+        </button>
 
-          <div className="flex items-center space-x-1 ml-2">
-            <button onClick={onFavoritesClick} className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group" title="Favorite Messages">
-              <svg className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 21l-1-0.7C5 15 2 12 2 8.6 2 5.1 4.5 3 7.5 3c1.9 0 3.6 1 4.5 2.1C12.9 4 14.6 3 16.5 3 19.5 3 22 5.1 22 8.6c0 3.4-3 6.4-9 11.7L12 21z" strokeWidth="1" /></svg>
-              {favoriteCount > 0 && (<span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">{favoriteCount}</span>)}
-            </button>
-          </div>
-        </div>
+        <div className="h-8 w-px bg-gray-200 dark:bg-slate-700 mx-2"></div>
+
+        <button onClick={onFavoritesClick} className="relative p-2.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 active:scale-90" title="Favorite Messages">
+          <Star className={`w-5 h-5 ${favoriteCount > 0 ? 'text-amber-400 fill-amber-400' : 'text-gray-400'}`} />
+          {favoriteCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-soft-primary text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-sm">{favoriteCount}</span>
+          )}
+        </button>
       </div>
     </div>
   );
