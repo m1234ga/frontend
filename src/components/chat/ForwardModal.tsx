@@ -35,7 +35,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   // Filter conversations based on search term
   const filteredConversations = conversations.filter(conversation =>
     conversation.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conversation.phone.includes(searchTerm)
+    conversation.phone?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleForward = async () => {

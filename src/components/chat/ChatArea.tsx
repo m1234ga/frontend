@@ -102,15 +102,15 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   }, [selectedConversation]);
 
-  // Helper function to format time. Accepts a Date, ISO string, or objects with `timestamp`.
-  const formatTime = (input?: string | Date | { timestamp?: string | Date }) => {
+  // Helper function to format time. Accepts a Date, ISO string, number, or objects with `timestamp`.
+  const formatTime = (input?: string | Date | number | { timestamp?: string | Date | number }) => {
     try {
-      let dateVal: string | Date | undefined = undefined;
+      let dateVal: string | Date | number | undefined = undefined;
       if (!input) return '';
       if (typeof input === 'object' && 'timestamp' in input) {
-        dateVal = (input as { timestamp?: string | Date }).timestamp;
+        dateVal = (input as { timestamp?: string | Date | number }).timestamp;
       } else {
-        dateVal = input as string | Date;
+        dateVal = input as string | Date | number;
       }
   const date = new Date(String(dateVal));
       const timezone = process.env.NEXT_PUBLIC_TIMEZONE || 'Africa/Cairo';

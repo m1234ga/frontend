@@ -48,7 +48,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
   useEffect(() => {
     if (user && token) {
-      const newSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000', {
+      // Use SOCKET_URL if set, otherwise fall back to API_URL, then default
+      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
+                       process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 
+                       'http://localhost:5000';
+      const newSocket = io(socketUrl, {
         auth: {
           token
         },

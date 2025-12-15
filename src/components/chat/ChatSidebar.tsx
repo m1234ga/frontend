@@ -106,8 +106,14 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         return;
       }
 
-  // Extract chats array (default to empty array)
-  const chats: ChatFromApi[] = (pageResult && typeof pageResult === 'object' && 'chats' in pageResult && Array.isArray((pageResult as PageResult).chats)) ? (pageResult as PageResult).chats! : [];
+      // Extract chats array (default to empty array)
+      const chats: ChatFromApi[] = 
+        (pageResult && 
+         typeof pageResult === 'object' && 
+         'chats' in pageResult && 
+         Array.isArray((pageResult as PageResult).chats))
+          ? (pageResult as PageResult).chats!
+          : [];
       
       // Parse tagsname field and convert to ChatTag array
       const chatsWithParsedTags = chats.map((chat: ChatModel & { tagsname?: string }) => {
