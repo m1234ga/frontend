@@ -619,7 +619,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       oscillator.onended = () => {
         try { ctx.close(); } catch { }
       };
-    } catch (e) {
+    } catch {
       // ignore audio errors (e.g., autoplay restrictions)
     }
   }, []);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Shield, Plus, Trash2, RefreshCw } from 'lucide-react';
 
 interface User {
@@ -36,13 +36,7 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (isOpen && user) {
-      fetchRoles();
-    }
-  }, [isOpen, user]);
-
-  const fetchRoles = async () => {
+  const fetchRoles = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -87,7 +81,13 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, token]);
+
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchRoles();
+    }
+  }, [isOpen, user, fetchRoles]);
 
   const handleAddRoles = async () => {
     if (selectedRoles.size === 0) {
@@ -117,6 +117,7 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
 
       setSelectedRoles(new Set());
       await fetchRoles();
+      if (onSuccess) onSuccess();
     } catch (err) {
       const getErrorMessage = (err: unknown) => {
         if (!err) return 'Unknown error';

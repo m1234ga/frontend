@@ -32,7 +32,6 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({
         return;
       }
 
-      const kauth = (user as any); // fallback or just check user
       setChecking(false);
 
       // Simple check based on user role

@@ -1,8 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { jwtDecode } from 'jwt-decode';
+import { jwtDecode, JwtPayload } from 'jwt-decode';
+
+interface DecodedToken extends JwtPayload {
+  userId: string;
+  username: string;
+  role?: string;
+}
 
 interface User {
   id: string;
@@ -47,6 +53,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [authenticated, setAuthenticated] = useState(false);
   const router = useRouter();
 
+  const logout = useCallback(() => {
+    localStorage.setItem('token', '');
+    localStorage.setItem('user', '');
+    setToken(null);
+    setUser(null);
+    setAuthenticated(false);
+    router.push('/auth');
+  }, [router]);
+
   useEffect(() => {
     // Check for token in local storage on mount
     const storedToken = localStorage.getItem('token');
@@ -54,10 +69,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (storedToken) {
       try {
-        const decoded: any = jwtDecode(storedToken);
+        const decoded = jwtDecode<DecodedToken>(storedToken);
         const currentTime = Date.now() / 1000;
 
-        if (decoded.exp < currentTime) {
+        if (decoded.exp && decoded.exp < currentTime) {
           // Token expired
           logout();
         } else {
@@ -82,25 +97,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     }
     setLoading(false);
-  }, []);
+  }, [logout]);
 
-  const login = (newToken: string, newUser: User) => {
+  const login = useCallback((newToken: string, newUser: User) => {
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
     setAuthenticated(true);
     router.push('/Chat'); // Redirect to chat after login
-  };
-
-  const logout = () => {
-    localStorage.setItem('token', '');
-    localStorage.setItem('user', '');
-    setToken(null);
-    setUser(null);
-    setAuthenticated(false);
-    router.push('/auth');
-  };
+  }, [router]);
 
   const value: AuthContextType = {
     user,

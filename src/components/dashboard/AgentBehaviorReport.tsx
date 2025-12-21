@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -12,9 +12,6 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
-  PieChart,
-  Pie,
-  Cell,
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
@@ -22,14 +19,12 @@ import {
   Radar
 } from 'recharts';
 import {
-  Clock,
   MessageSquare,
   TrendingUp,
   AlertTriangle,
   CheckCircle,
   Users,
-  Target,
-  Activity
+  Target
 } from 'lucide-react';
 
 interface BehaviorMetrics {
@@ -61,7 +56,6 @@ interface AgentBehaviorReportProps {
   timeRange: string;
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
 
 export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
   agentId,
@@ -72,17 +66,13 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
   const [tatData, setTatData] = useState<TATData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchBehaviorData();
-  }, [agentId, fieldType, timeRange]);
-
-  const fetchBehaviorData = async () => {
+  const fetchBehaviorData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const endpoint = agentId 
+      const endpoint = agentId
         ? `/api/agent-report/${agentId}?timeRange=${timeRange}&field=${fieldType}`
         : `/api/dashboard?timeRange=${timeRange}&field=${fieldType}`;
-      
+
       const response = await fetch(endpoint);
       if (response.ok) {
         const data = await response.json();
@@ -94,7 +84,11 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [agentId, timeRange, fieldType]);
+
+  useEffect(() => {
+    fetchBehaviorData();
+  }, [fetchBehaviorData]);
 
   const getFieldSpecificMetrics = () => {
     if (fieldType === 'medical') {
@@ -197,8 +191,8 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
               Agent Behavior Analysis
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
-              {fieldType === 'medical' ? 'Medical Field' : 
-               fieldType === 'restaurant' ? 'Restaurant Field' : 'General'} Performance Metrics
+              {fieldType === 'medical' ? 'Medical Field' :
+                fieldType === 'restaurant' ? 'Restaurant Field' : 'General'} Performance Metrics
             </p>
           </div>
           <div className="flex items-center space-x-4">
@@ -240,16 +234,16 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
             <YAxis />
             <Tooltip />
             <Legend />
-            <Line 
-              type="monotone" 
-              dataKey="avgFirstResponseTime" 
-              stroke="#8884d8" 
+            <Line
+              type="monotone"
+              dataKey="avgFirstResponseTime"
+              stroke="#8884d8"
               name="First Response Time (s)"
             />
-            <Line 
-              type="monotone" 
-              dataKey="avgResolutionTime" 
-              stroke="#82ca9d" 
+            <Line
+              type="monotone"
+              dataKey="avgResolutionTime"
+              stroke="#82ca9d"
               name="Resolution Time (s)"
             />
           </LineChart>
@@ -379,11 +373,10 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
                     </>
                   )}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      agent.customerSatisfaction >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${agent.customerSatisfaction >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                       agent.customerSatisfaction >= 70 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                    }`}>
+                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                      }`}>
                       {agent.customerSatisfaction}%
                     </span>
                   </td>
