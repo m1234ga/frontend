@@ -41,6 +41,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [hasMore, setHasMore] = useState(true);
   const pageRef = useRef<number>(1);
   const isFetching = useRef(false);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [showContactTagManager, setShowContactTagManager] = useState(false);
   const [selectedContactForTags, setSelectedContactForTags] = useState<Contact | null>(null);
   const [showChatTagManager, setShowChatTagManager] = useState(false);
@@ -71,7 +72,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const { user, token } = useAuth();
   const chatRouter = useMemo(() => Chat(token || ""), [token]);
-  const { onChatUpdate } = useSocket();
+  const { onChatUpdate, onChatPresence } = useSocket();
 
 
   const fetchContacts = useCallback(async () => {
@@ -90,23 +91,31 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     try {
       if (isFetching.current) return;
       isFetching.current = true;
+      setIsFetchingMore(true);
       const currentPage = reset ? 1 : pageRef.current;
       type ChatFromApi = ChatModel & { tagsname?: string };
       type PageResult = { chats: ChatFromApi[] };
-      // Call the GetChatsPage helper and use the returned `chats` array directly.
-      const pageResult = await Chat(token || "").GetChatsPage(currentPage, 25);
 
-      // If API returned an error-shaped object, log and bail so it's visible in console
+      // Determine the status filter based on the active tab
+      let statusFilter: string | undefined = undefined;
+      if (activeTab === 'open') statusFilter = 'open';
+      else if (activeTab === 'closed') statusFilter = 'closed';
+
+      // Call the GetChatsPage helper with the current status filter
+      const pageResult = await Chat(token || "").GetChatsPage(currentPage, 25, statusFilter);
+
+      // If API returned an error-shaped object, log and bail
       if (pageResult && typeof pageResult === 'object' && 'error' in pageResult) {
         console.error('GetChatsPage API error:', pageResult);
-        setConversations([]);
+        if (reset) setConversations([]);
         setHasMore(false);
         isFetching.current = false;
+        setIsFetchingMore(false);
         setIsLoading(false);
         return;
       }
 
-      // Extract chats array (default to empty array)
+      // Extract chats array
       const chats: ChatFromApi[] =
         (pageResult &&
           typeof pageResult === 'object' &&
@@ -120,7 +129,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         let parsedTags: ChatTag[] = [];
 
         if (chat.tagsname && typeof chat.tagsname === 'string') {
-          // Split by '-_-' delimiter and create ChatTag objects
           const tagData = chat.tagsname.split('-_-').filter((data: string) => data.trim() !== '');
           parsedTags = tagData.map((data: string, index: number) => {
             const [tagName, tagId] = data.split('_-_');
@@ -137,40 +145,37 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
         return {
           ...chat,
+          // Normalize lastMessageTime here
+          lastMessageTime: chat.lastMessageTime ? new Date(chat.lastMessageTime) : new Date(),
+          isTyping: false,
           tags: parsedTags
         };
       });
 
-      const toMs = (v: Date | string | number) => (v instanceof Date ? v.getTime() : new Date(v).getTime());
-      const sortedChats = chatsWithParsedTags.sort(
-        (a: ChatModel, b: ChatModel) => toMs(b.lastMessageTime) - toMs(a.lastMessageTime)
-      );
       if (reset) {
-        setConversations(sortedChats);
+        setConversations(chatsWithParsedTags);
         pageRef.current = 2;
       } else {
         setConversations(prev => {
-          // dedupe by id
           const ids = new Set(prev.map(p => p.id));
-          const filtered = (sortedChats as ChatModel[]).filter((c) => !ids.has(c.id));
+          const filtered = (chatsWithParsedTags as ChatModel[]).filter((c) => !ids.has(c.id));
           return [...prev, ...filtered];
         });
         pageRef.current = pageRef.current + 1;
       }
 
-      // If we got fewer than 25 chats, there's no more data
-      // Also set hasMore to false if we got 0 chats
       setHasMore(chats.length >= 25 && chats.length > 0);
     } catch (error) {
       console.error('Error fetching conversations:', error);
-      setConversations([]);
+      if (reset) setConversations([]);
       setHasMore(false);
     }
     finally {
       isFetching.current = false;
+      setIsFetchingMore(false);
       setIsLoading(false);
     }
-  }, [chatRouter, isFetching]);
+  }, [token, activeTab]);
 
   // Fetch archived chats
   const fetchArchivedChats = useCallback(async () => {
@@ -362,7 +367,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       let newConversations;
 
       // Parse tagsname field for the updated chat
-      let parsedTags: ChatTag[] = [];
+      let parsedTags: ChatTag[] | null = null;
       if (updatedChat.tagsname && typeof updatedChat.tagsname === 'string') {
         const tagNames = updatedChat.tagsname.split('-_-').filter((name: string) => name.trim() !== '');
         parsedTags = tagNames.map((tagName: string, index: number) => ({
@@ -386,14 +391,14 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           unreadCount: updatedChat.unreadCount,
           isOnline: updatedChat.isOnline,
           isTyping: updatedChat.isTyping,
-          tags: parsedTags
+          tags: parsedTags !== null ? parsedTags : newConversations[existingIndex].tags
         };
       } else {
         // Add new conversation
         newConversations = [{
           ...updatedChat,
           lastMessageTime: updatedChat.lastMessageTime ? new Date(updatedChat.lastMessageTime as Date | string | number) : new Date(),
-          tags: parsedTags
+          tags: parsedTags || []
         }, ...prevConversations];
       }
 
@@ -407,13 +412,30 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     });
   }, []);
 
-  useEffect(() => {
-    onChatUpdate(handleChatUpdate);
-  }, [onChatUpdate, handleChatUpdate]);
+  const handleChatPresence = useCallback((data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => {
+    setConversations(prevConversations => {
+      const existingIndex = prevConversations.findIndex(chat => chat.id === data.chatId);
+      if (existingIndex === -1) return prevConversations;
+
+      const newConversations = [...prevConversations];
+      newConversations[existingIndex] = {
+        ...newConversations[existingIndex],
+        isOnline: data.isOnline,
+        isTyping: data.isTyping
+      };
+      return newConversations;
+    });
+  }, []);
 
   useEffect(() => {
-    // reset the paginated list on mount
+    onChatUpdate(handleChatUpdate);
+    onChatPresence(handleChatPresence);
+  }, [onChatUpdate, handleChatUpdate, onChatPresence, handleChatPresence]);
+
+  useEffect(() => {
+    // reset the paginated list on mount or tab change
     const initializeData = async () => {
+      setIsLoading(true);
       await fetchConversations(true);
       await Promise.all([
         fetchContacts(),
@@ -424,7 +446,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       ]);
     };
     initializeData();
-  }, [fetchConversations, fetchContacts, fetchArchivedChats, fetchAssignedChats, fetchOpenChats, fetchClosedChats]);
+  }, [activeTab, fetchConversations, fetchContacts, fetchArchivedChats, fetchAssignedChats, fetchOpenChats, fetchClosedChats]);
 
   // Infinite scroll: attach to sidebar container
   useEffect(() => {
@@ -487,12 +509,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const filteredConversations = useMemo(() => {
     if (!isClient) return []; // Prevent hydration mismatch
 
-    let filtered = conversations.filter(conversation => {
-      if (conversation.name) {
-        return conversation.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          conversation.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase());
-      }
-      return true;
+    let filtered = conversations.filter(chat => {
+      const searchLower = searchTerm.toLowerCase();
+      const nameMatch = (chat.name || '').toLowerCase().includes(searchLower);
+      const phoneMatch = (chat.phone || '').includes(searchTerm);
+      const messageMatch = (chat.lastMessage || '').toLowerCase().includes(searchLower);
+      return nameMatch || phoneMatch || messageMatch;
     });
 
     // Apply unread filter
@@ -548,7 +570,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     });
 
     return sorted;
-  }, [conversations, searchTerm, filters, isClient]);
+  }, [conversations, archivedChats, assignedChats, openChats, closedChats, activeTab, searchTerm, filters, isClient]);
 
   const filteredContacts = useMemo(() => {
     if (!isClient) return []; // Prevent hydration mismatch
@@ -1178,31 +1200,25 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                   let currentConversations: ChatModel[] = [];
                   switch (activeTab) {
                     case 'chats':
+                    case 'open':
+                    case 'closed':
                       currentConversations = filteredConversations;
                       break;
-                    case 'open':
-                      currentConversations = openChats.filter(chat =>
-                        chat.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        chat.phone.includes(searchTerm)
-                      );
-                      break;
-                    case 'closed':
-                      currentConversations = closedChats.filter(chat =>
-                        chat.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        chat.phone.includes(searchTerm)
-                      );
-                      break;
                     case 'archived':
-                      currentConversations = archivedChats.filter(chat =>
-                        chat.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        chat.phone.includes(searchTerm)
-                      );
+                      currentConversations = archivedChats.filter(chat => {
+                        const matchesSearch = (chat.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (chat.phone || '').includes(searchTerm) ||
+                          (chat.lastMessage || '').toLowerCase().includes(searchTerm.toLowerCase());
+                        return matchesSearch;
+                      });
                       break;
                     case 'assigned':
-                      currentConversations = assignedChats.filter(chat =>
-                        chat.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        chat.phone.includes(searchTerm)
-                      );
+                      currentConversations = assignedChats.filter(chat => {
+                        const matchesSearch = (chat.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (chat.phone || '').includes(searchTerm) ||
+                          (chat.lastMessage || '').toLowerCase().includes(searchTerm.toLowerCase());
+                        return matchesSearch;
+                      });
                       break;
                   }
 
@@ -1310,7 +1326,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               <div className="max-w-full text-center">
                 {/* tiny visual separation */}
                 <div className="h-0.5 w-full bg-gray-100 dark:bg-gray-800 -mt-2 mb-2" aria-hidden />
-                {isFetching ? (
+                {isFetchingMore ? (
                   <div className="flex items-center justify-center space-x-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
                     <span className="text-xs theme-text-secondary">Loading more...</span>

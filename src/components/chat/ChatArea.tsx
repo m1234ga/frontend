@@ -14,6 +14,7 @@ import Chat from './ChatRouters';
 import ChatCloseModal from '@/components/common/ChatCloseModal';
 import ChatHeader from './ChatHeader';
 import MessageInput from './MessageInput';
+import TypingIndicator from './TypingIndicator';
 
 // TempMessage type is imported from '@/types/chat'
 
@@ -395,7 +396,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             isRead: false,
             isDelivered: false,
             isFromMe: true,
-            phone: selectedConversation.phone,
+            phone: selectedConversation.phone ?? selectedConversation.id + '@g.us',
             // Add temporary mediaPath using the base64 data so image shows while sending
             mediaPath: base64Image
           };
@@ -789,7 +790,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               isRead: false,
               isDelivered: false,
               isFromMe: true,
-              phone: selectedConversation.phone
+              phone: selectedConversation.phone || selectedConversation.id,
+              mediaPath: base64Audio
             };
 
             // Emit audio via Socket.IO
@@ -846,7 +848,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
 
   // Favorite messages functions
-  const toggleFavorite = (message: ChatMessage) => {
+  const toggleFavorite = useCallback((message: ChatMessage) => {
     setFavoriteMessages(prev => {
       const isFavorite = prev.some(fav => fav.id === message.id);
       if (isFavorite) {
@@ -855,7 +857,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         return [...prev, message];
       }
     });
-  };
+  }, []);
 
   const sendTemplateMessage = (template: { id: number, name: string, content: string }) => {
     setNewMessage(template.content);
@@ -916,10 +918,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   // Forward message functions
-  const handleForwardMessage = (message: ChatMessage) => {
+  const handleForwardMessage = useCallback((message: ChatMessage) => {
     setMessageToForward(message);
     setShowForwardModal(true);
-  };
+  }, []);
 
   const handleForward = async (message: ChatMessage, targetChatId: string) => {
     try {
@@ -967,7 +969,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   // Edit message function
-  const handleEditMessage = async (message: ChatMessage, newMessage: string) => {
+  const handleEditMessage = useCallback(async (message: ChatMessage, newMessage: string) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/EditMessage/${message.id}`, {
         method: 'PUT',
@@ -992,10 +994,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       console.error('Error editing message:', error);
       alert('Failed to edit message. Please try again.');
     }
-  };
+  }, [onNewMessage]);
 
   // Add note to message function
-  const handleAddNoteToMessage = async (message: ChatMessage, note: string) => {
+  const handleAddNoteToMessage = useCallback(async (message: ChatMessage, note: string) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/AddNoteToMessage/${message.id}`, {
         method: 'PUT',
@@ -1020,10 +1022,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       console.error('Error adding note to message:', error);
       alert('Failed to add note. Please try again.');
     }
-  };
+  }, [onNewMessage]);
 
   // Pin message function
-  const handlePinMessage = async (message: ChatMessage, isPinned: boolean) => {
+  const handlePinMessage = useCallback(async (message: ChatMessage, isPinned: boolean) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/PinMessage/${message.id}`, {
         method: 'PUT',
@@ -1048,19 +1050,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       console.error('Error pinning/unpinning message:', error);
       alert('Failed to pin/unpin message. Please try again.');
     }
-  };
+  }, [onNewMessage]);
 
   // Handle message menu open/close
-  const handleMessageMenuToggle = (messageId: string) => {
-    setOpenMessageMenuId(openMessageMenuId === messageId ? null : messageId);
-  };
+  const handleMessageMenuToggle = useCallback((messageId: string) => {
+    setOpenMessageMenuId(prevId => prevId === messageId ? null : messageId);
+  }, []);
 
   // React to message function
-  const handleReactToMessage = (message: ChatMessage, position: { x: number; y: number }) => {
+  const handleReactToMessage = useCallback((message: ChatMessage, position: { x: number; y: number }) => {
     setMessageToReact(message);
     setReactionPickerPosition(position);
     setShowReactionPicker(true);
-  };
+  }, []);
 
   // Add reaction function
   const handleAddReaction = async (emoji: string) => {
@@ -1102,13 +1104,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   };
 
   // Reply to message function
-  const handleReplyToMessage = (message: ChatMessage) => {
+  const handleReplyToMessage = useCallback((message: ChatMessage) => {
     setReplyToMessage(message);
     inputRef.current?.focus();
-  };
+  }, []);
 
   // Delete message function
-  const handleDeleteMessage = async (message: ChatMessage) => {
+  const handleDeleteMessage = useCallback(async (message: ChatMessage) => {
     if (!confirm('Are you sure you want to delete this message?')) {
       return;
     }
@@ -1134,7 +1136,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       console.error('Error deleting message:', error);
       alert('Failed to delete message. Please try again.');
     }
-  };
+  }, []);
 
   // Keyboard event handler for closing popups
   useEffect(() => {
@@ -1234,16 +1236,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
         {/* Typing indicator */}
         {typingUsers.size > 0 && (
-          <div className="flex justify-start">
-            <div className="bg-gray-700/50 backdrop-blur-sm px-4 py-2 rounded-lg border theme-border-primary">
-              <div className="typing-indicator">
-                <div className="typing-dot"></div>
-                <div className="typing-dot"></div>
-                <div className="typing-dot"></div>
-              </div>
+          <div className="flex justify-start animate-soft-fade-in">
+            <div className="bg-white dark:bg-slate-800/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-soft-sm">
+              <TypingIndicator className="flex items-center space-x-1 text-soft-primary text-sm font-medium" dotClassName="bg-soft-primary" text="typing" />
             </div>
           </div>
         )}
+
 
         {/* Recording area */}
         {(recordingState === 'recording' || recordingState === 'paused' || recordingState === 'reviewing') && (

@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, memo } from 'react';
 import Image from 'next/image';
-import { Pin } from 'lucide-react';
+import { Pin, Check, CheckCheck } from 'lucide-react';
 import { ImageModal } from './ImageModal';
 import { MessageMenu } from './MessageMenu';
 import { ChatMessage, MessageReaction } from '../../../../Shared/Models';
@@ -16,6 +16,18 @@ const formatTime = (dateInput?: string | number | Date) => {
     minute: '2-digit',
     timeZone: timezone
   });
+};
+
+const MessageStatus = ({ isRead, isDelivered, isOwnMessage }: { isRead: boolean, isDelivered: boolean, isOwnMessage: boolean }) => {
+  if (!isOwnMessage) return null;
+
+  if (isRead) {
+    return <CheckCheck className="w-3.5 h-3.5 text-sky-300 ml-1" />;
+  }
+  if (isDelivered) {
+    return <CheckCheck className="w-3.5 h-3.5 text-white/50 ml-1" />;
+  }
+  return <Check className="w-3.5 h-3.5 text-white/50 ml-1" />;
 };
 
 export function Message({
@@ -117,9 +129,10 @@ export function Message({
           {message.messageType === 'text' && (
             <div className="flex flex-wrap items-end gap-x-3">
               <p className="text-[15px] leading-relaxed break-words">{message.message}</p>
-              <div className={`text-[10px] ml-auto ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>
+              <div className={`text-[10px] ml-auto flex items-center ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>
                 {message.isEdit && <span className="italic mr-1">Edited</span>}
                 {formatTime(message.timeStamp)}
+                <MessageStatus isRead={message.isRead} isDelivered={message.isDelivered} isOwnMessage={isOwnMessage} />
               </div>
             </div>
           )}
@@ -132,7 +145,10 @@ export function Message({
               {!!message.message && message.message !== '[Image]' && (
                 <p className="text-sm">{message.message}</p>
               )}
-              <span className={`text-[10px] self-end ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>{formatTime(message.timeStamp)}</span>
+              <span className={`text-[10px] self-end flex items-center ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>
+                {formatTime(message.timeStamp)}
+                <MessageStatus isRead={message.isRead} isDelivered={message.isDelivered} isOwnMessage={isOwnMessage} />
+              </span>
             </div>
           )}
 
@@ -141,7 +157,10 @@ export function Message({
               <audio controls className="w-full h-8 rounded-lg">
                 <source src={buildMediaUrl(message.mediaPath, `Audio/${message.message}`)} />
               </audio>
-              <span className={`text-[10px] self-end ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>{formatTime(message.timestamp)}</span>
+              <span className={`text-[10px] self-end flex items-center ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>
+                {formatTime(message.timestamp)}
+                <MessageStatus isRead={message.isRead} isDelivered={message.isDelivered} isOwnMessage={isOwnMessage} />
+              </span>
             </div>
           )}
 
@@ -153,14 +172,20 @@ export function Message({
               {!!message.message && message.message !== '[Video]' && (
                 <p className="text-sm">{message.message}</p>
               )}
-              <span className={`text-[10px] self-end ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>{formatTime(message.timeStamp)}</span>
+              <span className={`text-[10px] self-end flex items-center ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>
+                {formatTime(message.timeStamp)}
+                <MessageStatus isRead={message.isRead} isDelivered={message.isDelivered} isOwnMessage={isOwnMessage} />
+              </span>
             </div>
           )}
 
           {message.messageType === 'sticker' && (
             <div className="flex flex-col space-y-1">
               <Image src={buildMediaUrl(message.mediaPath, String(message.message || ''))} alt="sticker" className="w-32 h-32 object-contain hover:scale-105 transition-transform" width={128} height={128} />
-              <span className={`text-[10px] self-end ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>{formatTime(message.timeStamp)}</span>
+              <span className={`text-[10px] self-end flex items-center ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>
+                {formatTime(message.timeStamp)}
+                <MessageStatus isRead={message.isRead} isDelivered={message.isDelivered} isOwnMessage={isOwnMessage} />
+              </span>
             </div>
           )}
 

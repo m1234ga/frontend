@@ -4,6 +4,8 @@ import React from 'react';
 import { User, Check, XCircle, UserPlus, Star } from 'lucide-react';
 import { Chat } from '@shared/Models';
 
+import TypingIndicator from './TypingIndicator';
+
 interface ChatHeaderProps {
   selectedConversation: Chat;
   isOnline: boolean;
@@ -34,17 +36,18 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline,
               <span className="bg-soft-primary text-white text-xs rounded-full px-2 py-0.5 font-bold shadow-soft-sm">{selectedConversation.unreadCount}</span>
             )}
           </div>
-          <p className="text-sm font-medium">
+          <div className="text-sm font-medium">
             {typingUsers.size > 0 ? (
-              <span className="text-soft-primary animate-pulse">typing...</span>
+              <TypingIndicator className="flex items-center space-x-1 text-soft-primary" dotClassName="bg-soft-primary" text="typing" />
             ) : isOnline ? (
               <span className="text-emerald-500 flex items-center gap-1.5"><span className="w-2 h-2 bg-emerald-500 rounded-full"></span>Online</span>
             ) : (
               <span className="text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 bg-gray-300 rounded-full"></span>Offline</span>
             )}
-          </p>
+          </div>
         </div>
       </div>
+
 
       <div className="flex items-center space-x-3">
         <button onClick={onAssignClick} className="soft-button bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-300 flex items-center gap-2" title="Assign to User">

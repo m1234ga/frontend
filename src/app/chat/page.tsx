@@ -169,6 +169,12 @@ export default function ChatPage() {
     if (!selectedConversation || message.chatId !== selectedConversation.id) {
       return;
     }
+
+    // Automatically mark as read if we're currently in the chat
+    if (!message.isFromMe) {
+      ChatRouter(token || "").MarkChatAsRead(selectedConversation.id).catch(console.error);
+    }
+
     setMessages(prev => {
       // Check if message already exists by ID or tempId
       const existingIndex = prev.findIndex(msg =>
@@ -182,6 +188,7 @@ export default function ChatPage() {
           ...updated[existingIndex],
           ...message,
           id: message.id, // Ensure ID is updated to the real one
+          mediaPath: updated[existingIndex].mediaPath || message.mediaPath,
           message: message.message?.replace(' (Sending...)', '') || message.message
         };
         return updated;
@@ -195,49 +202,72 @@ export default function ChatPage() {
       return;
     }
     setMessages(prev => {
-      // First try to match by tempId (the original optimistic message ID)
-      // If tempId is provided, find the message with that ID
-      // Otherwise, try to find a sending message with same messageType
-      const existingIndex = updatedMessage.tempId
-        ? prev.findIndex(msg => (msg.id === updatedMessage.tempId || msg.id === updatedMessage.id) && msg.isFromMe)
-        : prev.findIndex(msg =>
-          // ... rest of logic checks
-          msg.chatId === updatedMessage.chatId &&
-          msg.isFromMe &&
-          msg.messageType === updatedMessage.messageType &&
-          (!msg.mediaPath || msg.message?.includes('(Sending...)'))
-        );
-
-      if (existingIndex === -1) {
-        // If not found, the message might have already been updated, or it's a new message
-        // In this case, we should add it as a new message
-        const updatedTimestamp = updatedMessage.timeStamp
-          ? new Date(updatedMessage.timeStamp)
-          : (updatedMessage.timestamp ? new Date(updatedMessage.timestamp) : new Date());
-        return [...prev, {
+      // 1. Check for exact match by current message ID
+      const exactIndex = prev.findIndex(msg => msg.id === updatedMessage.id);
+      if (exactIndex !== -1) {
+        const updated = [...prev];
+        updated[exactIndex] = {
+          ...updated[exactIndex],
           ...updatedMessage,
-          timestamp: updatedTimestamp.toISOString(),
-          timeStamp: updatedTimestamp
-        }];
+          mediaPath: updated[exactIndex].mediaPath || updatedMessage.mediaPath,
+          message: updatedMessage.message?.replace(' (Sending...)', '') || updated[exactIndex].message || updatedMessage.message
+        };
+        return updated;
       }
 
-      const updated = [...prev];
-      const existing = updated[existingIndex];
+      // 2. Check for match by tempId (if provided)
+      const tempIndex = updatedMessage.tempId
+        ? prev.findIndex(msg => msg.id === updatedMessage.tempId)
+        : -1;
+      if (tempIndex !== -1) {
+        const updated = [...prev];
+        updated[tempIndex] = {
+          ...updated[tempIndex],
+          ...updatedMessage,
+          id: updatedMessage.id || updated[tempIndex].id, // Replace temp ID with real ID
+          mediaPath: updated[tempIndex].mediaPath || updatedMessage.mediaPath,
+          message: updatedMessage.message?.replace(' (Sending...)', '') || updated[tempIndex].message || updatedMessage.message
+        };
+        return updated;
+      }
+
+      // 3. Last fallback: Find an optimistic message of same type that is still in "Sending..." state
+      const optimisticIndex = prev.findIndex(msg =>
+        msg.isFromMe &&
+        msg.messageType === updatedMessage.messageType &&
+        msg.message?.includes('(Sending...)')
+      );
+
+      if (optimisticIndex !== -1) {
+        const updated = [...prev];
+        updated[optimisticIndex] = {
+          ...updated[optimisticIndex],
+          ...updatedMessage,
+          mediaPath: updated[optimisticIndex].mediaPath || updatedMessage.mediaPath,
+          message: updatedMessage.message?.replace(' (Sending...)', '') || updated[optimisticIndex].message || updatedMessage.message
+        };
+        return updated;
+      }
+
+      // 4. If not found and it's a sending confirmation (has ID and isFromMe), treat as new if it's very recent.
+      // However, for ReadReceipt updates (where message already has an ID but wasn't found in current UI list),
+      // we DON'T want to append it to the bottom as it's likely an older message not currently loaded.
+      if (!updatedMessage.isFromMe || updatedMessage.message?.includes('(Sending...)')) {
+        // Don't add status updates for messages we don't have in view
+        return prev;
+      }
+
       const updatedTimestamp = updatedMessage.timeStamp
         ? new Date(updatedMessage.timeStamp)
-        : (updatedMessage.timestamp ? new Date(updatedMessage.timestamp) : (existing.timeStamp || new Date()));
+        : (updatedMessage.timestamp ? new Date(updatedMessage.timestamp) : new Date());
 
-      updated[existingIndex] = {
-        ...existing,
-        id: updatedMessage.id || existing.id,
-        // Always use the updated mediaPath if provided (replace base64 with real path)
-        mediaPath: updatedMessage.mediaPath ? updatedMessage.mediaPath : existing.mediaPath,
+      // Only append if it looks like a legitimate new message being confirmed
+      return [...prev, {
+        ...updatedMessage,
         timestamp: updatedTimestamp.toISOString(),
         timeStamp: updatedTimestamp,
-        message: existing.message?.replace(' (Sending...)', '') || existing.message || updatedMessage.message,
-        messageType: updatedMessage.messageType || existing.messageType
-      };
-      return updated;
+        message: updatedMessage.message?.replace(' (Sending...)', '') || updatedMessage.message
+      }];
     });
   }, [selectedConversation]);
 
