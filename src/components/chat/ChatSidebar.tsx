@@ -1442,8 +1442,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
           {/* Contact Tag Manager Popup - Side Slide */}
           {showContactTagManager && selectedContactForTags && (
-            <div className="fixed inset-0 bg-black/50 z-50">
-              <div className="absolute left-0 top-0 h-full w-full bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -1531,8 +1531,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
           {/* Tag Management Popup - Side Slide */}
           {showTagManagement && (
-            <div className="fixed inset-0 bg-black/50 z-50">
-              <div className="absolute left-0 top-0 h-full w-full bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Manage Tags</h3>
@@ -1627,8 +1627,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
           {/* Chat Tag Manager Popup - Side Slide */}
           {showChatTagManager && selectedChatForTags && (
-            <div className="fixed inset-0 bg-black/50 z-50">
-              <div className="absolute left-0 top-0 h-full w-full bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -1716,8 +1716,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
           {/* Create Tag Side Dialog */}
           {showCreateTagDialog && (
-            <div className="fixed inset-0 bg-black/50 z-50">
-              <div className="absolute left-0 top-0 h-full w-full bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+              <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create New Tag</h3>

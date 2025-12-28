@@ -5,6 +5,7 @@ import { User, Check, XCircle, UserPlus, Star } from 'lucide-react';
 import { Chat } from '@shared/Models';
 
 import TypingIndicator from './TypingIndicator';
+import TagPill from '../common/TagPill';
 
 interface ChatHeaderProps {
   selectedConversation: Chat;
@@ -31,11 +32,20 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline,
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-2">
-            <h2 className="font-bold text-gray-900 dark:text-white text-lg truncate tracking-tight">{selectedConversation.name}</h2>
+            <h2 className="font-bold text-gray-900 dark:text-white text-lg truncate tracking-tight">
+              {selectedConversation.name?.split('-_-')[0]}
+            </h2>
             {selectedConversation.unreadCount > 0 && (
               <span className="bg-soft-primary text-white text-xs rounded-full px-2 py-0.5 font-bold shadow-soft-sm">{selectedConversation.unreadCount}</span>
             )}
           </div>
+          {selectedConversation.tags && selectedConversation.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 my-1">
+              {selectedConversation.tags.map((tag) => (
+                <TagPill key={tag.id} id={tag.id} name={tag.name} color={tag.color} />
+              ))}
+            </div>
+          )}
           <div className="text-sm font-medium">
             {typingUsers.size > 0 ? (
               <TypingIndicator className="flex items-center space-x-1 text-soft-primary" dotClassName="bg-soft-primary" text="typing" />
