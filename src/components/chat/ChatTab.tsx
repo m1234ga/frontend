@@ -48,8 +48,12 @@ const ChatTab: React.FC<ChatTabProps> = ({
         >
           <div className="flex items-center space-x-3">
             {/* Avatar Section */}
-            <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-full flex items-center justify-center shadow-md relative shrink-0">
-              <User className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-full flex items-center justify-center shadow-md relative shrink-0 overflow-hidden">
+              {conversation.avatar ? (
+                <img src={conversation.avatar} alt={conversation.name} className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-6 h-6 text-white" />
+              )}
               {conversation.isOnline && (
                 <div className="absolute -bottom-0 -right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
               )}
@@ -141,6 +145,11 @@ const ChatTab: React.FC<ChatTabProps> = ({
                           : 'bg-blue-100 text-blue-800'
                           }`}>
                           {conversation.status === 'closed' ? 'Closed' : 'Open'}
+                        </span>
+                      )}
+                      {conversation.status === 'closed' && conversation.reason && (
+                        <span className="text-[10px] text-gray-500 italic truncate max-w-[100px]">
+                          - {conversation.reason}
                         </span>
                       )}
                       <p className="text-sm theme-text-secondary truncate">

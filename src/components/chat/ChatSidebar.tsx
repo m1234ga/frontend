@@ -4,6 +4,7 @@ import { Search, MoreVertical, LogOut, User, Send, X, MessageSquare, Tag, Plus, 
 import ChatTab from './ChatTab';
 import Chat from './ChatRouters';
 import { NewChatModal } from './NewChatModal';
+import ChatCloseModal from '@/components/common/ChatCloseModal';
 import { Contact, Chat as ChatModel, ChatTag } from '../../../../Shared/Models';
 import TagPill from '../common/TagPill';
 import { useSocket } from '@/contexts/SocketContext';
@@ -69,6 +70,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [userSearchTerm, setUserSearchTerm] = useState('');
+
+  // Close reason modal state
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [availableCloseTags, setAvailableCloseTags] = useState<{ id: string; name: string; color?: string }[]>([]);
+  const [selectedCloseTagId, setSelectedCloseTagId] = useState<string | null>(null);
+  const [chatToCloseId, setChatToCloseId] = useState<string | null>(null);
 
   const { user, token } = useAuth();
   const chatRouter = useMemo(() => Chat(token || ""), [token]);
@@ -359,10 +366,69 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   // Toggle chat status (open/closed)
   const handleToggleChatStatus = async (chatId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'open' ? 'closed' : 'open';
-    await chatRouter.UpdateChatStatus(chatId, newStatus);
+
+    if (newStatus === 'closed') {
+      setChatToCloseId(chatId);
+      setShowCloseModal(true);
+      // Load tags
+      try {
+        const tags = await chatRouter.GetTags();
+        type TagApiItem = { tagId?: number | string; id?: number | string; tagName?: string; name?: string };
+        const formatted = (tags || []).map((t: TagApiItem) => ({
+          id: (t.tagId || t.id || '').toString(),
+          name: t.tagName || t.name || ''
+        }));
+        const filtered = formatted.filter((t: { id: string; name: string }) => t.name && t.id);
+
+        if (filtered.length > 0) {
+          setAvailableCloseTags(filtered);
+        } else {
+          setAvailableCloseTags([
+            { id: '1', name: 'Issue Resolved' },
+            { id: '2', name: 'Customer Satisfied' },
+          ]);
+        }
+      } catch (error) {
+        console.error('Error fetching tags for close reason:', error);
+        setAvailableCloseTags([
+          { id: '1', name: 'Issue Resolved' },
+          { id: '2', name: 'Customer Satisfied' },
+        ]);
+      }
+      return;
+    }
+
+    await chatRouter.UpdateChatStatus(chatId, newStatus, "");
     fetchConversations();
     fetchOpenChats();
     fetchClosedChats();
+  };
+
+  const handleConfirmClose = async () => {
+    if (!chatToCloseId) return;
+
+    let reason = "Closed";
+    if (selectedCloseTagId) {
+      const tag = availableCloseTags.find(t => t.id === selectedCloseTagId);
+      if (tag) reason = tag.name;
+    } else {
+      if (availableCloseTags.length > 0) {
+        alert('Please select a reason (tag) for closing this chat.');
+        return;
+      }
+    }
+
+    try {
+      await chatRouter.UpdateChatStatus(chatToCloseId, 'closed', reason);
+      fetchConversations();
+      fetchOpenChats();
+      fetchClosedChats();
+      setShowCloseModal(false);
+      setChatToCloseId(null);
+      setSelectedCloseTagId(null);
+    } catch (error) {
+      console.error('Error closing chat:', error);
+    }
   };
 
   // Socket event handlers - use useCallback to prevent infinite re-renders
@@ -623,6 +689,32 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     setSelectedContacts([]);
   };
 
+  const handleSelectConversation = async (conversation: ChatModel) => {
+    onSelectConversation(conversation);
+
+    // Refresh avatar in background
+    if (conversation.id) {
+      try {
+        const result = await chatRouter.RefreshChatAvatar(conversation.id, conversation.phone);
+        if (result && result.success && result.avatar) {
+          // Update the conversation avatar in the local state
+          const updatedAvatar = result.avatar;
+
+          setConversations(prev => prev.map(c =>
+            c.id === conversation.id ? { ...c, avatar: updatedAvatar } : c
+          ));
+
+          // Also update the currently selected conversation object if it matches
+          if (selectedConversationId === conversation.id) {
+            onSelectConversation({ ...conversation, avatar: updatedAvatar });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to auto-refresh avatar:', error);
+      }
+    }
+  };
+
   const sendBulkMessage = async () => {
     if (!bulkMessage.trim() || selectedContacts.length === 0) return;
 
@@ -731,9 +823,17 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
     try {
       await chatRouter.UpdateContactTags(contactId, updatedTags.map(t => t.id));
+
+      const updateContact = (c: Contact) => ({ ...c, tags: updatedTags });
+
       setAllContacts(prev =>
-        prev.map(c => c.id === contactId ? { ...c, tags: updatedTags } : c)
+        prev.map(c => c.id === contactId ? updateContact(c) : c)
       );
+
+      if (selectedContactForTags && selectedContactForTags.id === contactId) {
+        setSelectedContactForTags(prev => prev ? updateContact(prev) : null);
+      }
+
     } catch (error) {
       console.error('Error assigning tag to contact:', error);
     }
@@ -747,9 +847,16 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
     try {
       await chatRouter.UpdateContactTags(contactId, updatedTags.map(t => t.id));
+
+      const updateContact = (c: Contact) => ({ ...c, tags: updatedTags });
+
       setAllContacts(prev =>
-        prev.map(c => c.id === contactId ? { ...c, tags: updatedTags } : c)
+        prev.map(c => c.id === contactId ? updateContact(c) : c)
       );
+
+      if (selectedContactForTags && selectedContactForTags.id === contactId) {
+        setSelectedContactForTags(prev => prev ? updateContact(prev) : null);
+      }
     } catch (error) {
       console.error('Error removing tag from contact:', error);
     }
@@ -769,12 +876,30 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   // Chat tag management functions
   const assignTagToChat = async (chatId: string, tagId: string) => {
+    const tag = availableTags.find(t => t.id === tagId);
+    if (!tag) return;
+
     try {
       await chatRouter.AssignTagToChat(chatId, tagId, user?.username || 'current_user');
 
-      await fetchConversations();
+      // Optimistic update
+      const updateChatTags = (chat: ChatModel) => {
+        const currentTags = chat.tags || [];
+        if (currentTags.some(t => t.id === tagId)) return chat;
+        return { ...chat, tags: [...currentTags, tag] };
+      };
+
+      setConversations(prev => prev.map(c => c.id === chatId ? updateChatTags(c) : c));
+
+      if (selectedChatForTags && selectedChatForTags.id === chatId) {
+        setSelectedChatForTags(prev => prev ? updateChatTags(prev) : null);
+      }
+
+      // Also fetch to ensure consistency
+      // await fetchConversations(); 
     } catch (error) {
       console.error('Error assigning tag to chat:', error);
+      // Revert if needed, but for now just logging
     }
   };
 
@@ -782,8 +907,19 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     try {
       await chatRouter.RemoveTagFromChat(chatId, tagId);
 
-      // Refresh conversations to get updated tags
-      await fetchConversations();
+      // Optimistic update
+      const updateChatTags = (chat: ChatModel) => {
+        const currentTags = chat.tags || [];
+        return { ...chat, tags: currentTags.filter(t => t.id !== tagId) };
+      };
+
+      setConversations(prev => prev.map(c => c.id === chatId ? updateChatTags(c) : c));
+
+      if (selectedChatForTags && selectedChatForTags.id === chatId) {
+        setSelectedChatForTags(prev => prev ? updateChatTags(prev) : null);
+      }
+
+      // await fetchConversations();
     } catch (error) {
       console.error('Error removing tag from chat:', error);
     }
@@ -1237,7 +1373,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                       <ChatTab
                         conversations={currentConversations}
                         selectedConversationId={selectedConversationId}
-                        onSelectConversation={onSelectConversation}
+                        onSelectConversation={handleSelectConversation}
                         onArchive={activeTab === 'chats' ? handleArchiveChat : undefined}
                         onUnarchive={activeTab === 'archived' ? handleUnarchiveChat : undefined}
                         onMuteToggle={(chatId) => {
@@ -1710,6 +1846,21 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               </div>
             </div>
           )}
+
+          {/* Chat Close Modal */}
+          <ChatCloseModal
+            isOpen={showCloseModal}
+            onCancel={() => {
+              setShowCloseModal(false);
+              setChatToCloseId(null);
+              setSelectedCloseTagId(null);
+            }}
+            onConfirm={handleConfirmClose}
+            tags={availableCloseTags}
+            selectedTagId={selectedCloseTagId}
+            onSelectTag={setSelectedCloseTagId}
+            conversationName={chatToCloseId ? (conversations.find(c => c.id === chatToCloseId)?.name || 'Chat') : 'Chat'}
+          />
 
           {/* Create Tag Side Dialog */}
           {showCreateTagDialog && (

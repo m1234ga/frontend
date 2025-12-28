@@ -23,8 +23,12 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline,
     <div className="glass-panel sticky top-0 z-30 mb-2 mx-4 mt-2 px-6 py-4 flex items-center justify-between">
       <div className="flex items-center space-x-4 flex-1">
         <div className="relative">
-          <div className="w-12 h-12 bg-gradient-to-br from-soft-primary to-soft-primary-light rounded-2xl flex items-center justify-center shadow-soft-md transform transition-transform hover:rotate-3">
-            <User className="w-6 h-6 text-white" />
+          <div className="w-12 h-12 bg-gradient-to-br from-soft-primary to-soft-primary-light rounded-2xl flex items-center justify-center shadow-soft-md transform transition-transform hover:rotate-3 overflow-hidden">
+            {selectedConversation.avatar ? (
+              <img src={selectedConversation.avatar} alt={selectedConversation.name} className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-6 h-6 text-white" />
+            )}
           </div>
           {isOnline && (
             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white dark:border-slate-800 rounded-full animate-bounce-subtle"></div>

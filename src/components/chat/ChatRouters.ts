@@ -1,38 +1,38 @@
 'use client';
 const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/') + 'Chat/api';
-export default function Chat(token:string){
-  async function GetContacts  () {
+export default function Chat(token: string) {
+  async function GetContacts() {
     try {
-      
-      const response = await fetch( apiUrl+'/GetContacts', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`, // ✅ Add the token here
-            'Content-Type': 'application/json'
-          }
-    });
+
+      const response = await fetch(apiUrl + '/GetContacts', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`, // ✅ Add the token here
+          'Content-Type': 'application/json'
+        }
+      });
       if (response.ok) {
         return await response.json();
-        
+
       }
     } catch (error) {
       console.error('Error fetching users:', error);
       return "Erorr"
     }
   };
-  
-  async function GetChats  () {
+
+  async function GetChats() {
     try {
-      const response = await fetch( apiUrl+'/GetChats', {
+      const response = await fetch(apiUrl + '/GetChats', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` // ✅ Add the token here
         }
-  });
+      });
       if (response.ok) {
         return await response.json();
-        
+
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -59,7 +59,7 @@ export default function Chat(token:string){
       } else {
         // Try to decode error body for diagnostics
         let body: string | null = null;
-  try { body = await response.text(); } catch { /* ignore */ }
+        try { body = await response.text(); } catch { /* ignore */ }
         console.error('GetChatsPage failed', { status: response.status, body });
         // Return a predictable shape so callers can display an error
         return { error: `Request failed with status ${response.status}`, details: body } as { error: string; details: string | null };
@@ -80,7 +80,7 @@ export default function Chat(token:string){
         },
         body: JSON.stringify({ tags })
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -97,7 +97,7 @@ export default function Chat(token:string){
       if (before) {
         url += `&before=${before}`;
       }
-      
+
       const response = await fetch(url, {
         method: "GET",
         headers: {
@@ -194,7 +194,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -216,7 +216,7 @@ export default function Chat(token:string){
         },
         body: JSON.stringify({ name })
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -238,7 +238,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -262,7 +262,7 @@ export default function Chat(token:string){
         },
         body: JSON.stringify({ chatId, tagId, createdBy })
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -284,7 +284,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -306,7 +306,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -328,7 +328,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -346,7 +346,7 @@ export default function Chat(token:string){
     try {
       const response = await fetch(apiUrl + `/UpdateChatStatus/${chatId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -364,12 +364,34 @@ export default function Chat(token:string){
     }
   }
 
+  async function RefreshChatAvatar(chatId: string, phone: string) {
+    try {
+      const response = await fetch(apiUrl + `/RefreshChatAvatar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ chatId, phone })
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        throw new Error('Failed to refresh chat avatar');
+      }
+    } catch (error) {
+      console.error('Error refreshing chat avatar:', error);
+      throw error;
+    }
+  }
+
   // Mark chat as read
   async function MarkChatAsRead(chatId: string) {
     try {
       const response = await fetch(apiUrl + `/MarkChatAsRead/${chatId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         }
@@ -413,7 +435,7 @@ export default function Chat(token:string){
     try {
       const response = await fetch(apiUrl + `/AssignChat`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -440,7 +462,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -469,7 +491,7 @@ export default function Chat(token:string){
         },
         body: formData
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -658,7 +680,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -678,7 +700,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -698,7 +720,7 @@ export default function Chat(token:string){
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -714,13 +736,13 @@ export default function Chat(token:string){
     try {
       const response = await fetch(apiUrl + `/ArchiveChat`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ chatId, userId })
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -736,13 +758,13 @@ export default function Chat(token:string){
     try {
       const response = await fetch(apiUrl + `/UnarchiveChat`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ chatId, userId })
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -758,13 +780,13 @@ export default function Chat(token:string){
     try {
       const response = await fetch(apiUrl + `/MuteChat`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ chatId, userId })
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -780,13 +802,13 @@ export default function Chat(token:string){
     try {
       const response = await fetch(apiUrl + `/UnmuteChat`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ chatId, userId })
       });
-      
+
       if (response.ok) {
         return await response.json();
       } else {
@@ -802,7 +824,7 @@ export default function Chat(token:string){
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/CreateNewChat`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -856,7 +878,8 @@ export default function Chat(token:string){
     MuteChat,
     UnmuteChat,
     CreateNewChat,
-    GetChatsPage
-}
+    GetChatsPage,
+    RefreshChatAvatar
+  }
 }
 
