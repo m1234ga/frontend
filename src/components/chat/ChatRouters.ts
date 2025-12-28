@@ -1,5 +1,6 @@
 'use client';
-const apiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/') + 'Chat/api';
+const baseApiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/');
+const apiUrl = baseApiUrl + 'Chat/api';
 export default function Chat(token: string) {
   async function GetContacts() {
     try {
@@ -411,7 +412,7 @@ export default function Chat(token: string) {
   // User management for assignment
   async function GetUsers() {
     try {
-      const response = await fetch(apiUrl + `/users`, {
+      const response = await fetch(baseApiUrl + `api/users`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -624,7 +625,7 @@ export default function Chat(token: string) {
     }
   }
 
-  async function AddReaction(messageId: string, userId: string, reaction: string) {
+  async function AddReaction(messageId: string, userId: string, emoji: string) {
     try {
       const response = await fetch(apiUrl + `/AddReaction`, {
         method: 'POST',
@@ -635,7 +636,7 @@ export default function Chat(token: string) {
         body: JSON.stringify({
           messageId,
           userId,
-          reaction
+          emoji
         })
       });
 

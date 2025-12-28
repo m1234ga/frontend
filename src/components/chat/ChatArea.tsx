@@ -207,22 +207,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const fetchUsers = useCallback(async () => {
     setLoadingUsers(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/users`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableUsers(data.users || []);
-      }
+      const users = await chatRouter.GetUsers();
+      setAvailableUsers(users);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
       setLoadingUsers(false);
     }
-  }, [token]);
+  }, [chatRouter]);
 
   // Assign chat function
   const handleAssignChat = () => {
@@ -971,17 +963,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   // Edit message function
   const handleEditMessage = useCallback(async (message: ChatMessage, newMessage: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/EditMessage/${message.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ newMessage })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to edit message');
-      }
+      await chatRouter.EditMessage(message.id, newMessage);
 
       // Update message in local state
       if (onNewMessage) {
@@ -994,22 +976,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       console.error('Error editing message:', error);
       alert('Failed to edit message. Please try again.');
     }
-  }, [onNewMessage]);
+  }, [chatRouter, onNewMessage]);
 
   // Add note to message function
   const handleAddNoteToMessage = useCallback(async (message: ChatMessage, note: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/AddNoteToMessage/${message.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ note })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add note to message');
-      }
+      await chatRouter.AddNoteToMessage(message.id, note);
 
       // Update message in local state
       if (onNewMessage) {
@@ -1022,22 +994,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       console.error('Error adding note to message:', error);
       alert('Failed to add note. Please try again.');
     }
-  }, [onNewMessage]);
+  }, [chatRouter, onNewMessage]);
 
   // Pin message function
   const handlePinMessage = useCallback(async (message: ChatMessage, isPinned: boolean) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/PinMessage/${message.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ isPinned })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to pin/unpin message');
-      }
+      await chatRouter.PinMessage(message.id, isPinned);
 
       // Update message in local state
       if (onNewMessage) {
@@ -1050,7 +1012,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       console.error('Error pinning/unpinning message:', error);
       alert('Failed to pin/unpin message. Please try again.');
     }
-  }, [onNewMessage]);
+  }, [chatRouter, onNewMessage]);
 
   // Handle message menu open/close
   const handleMessageMenuToggle = useCallback((messageId: string) => {
@@ -1069,23 +1031,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (!messageToReact || !user?.id) return;
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/AddReaction`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messageId: messageToReact.id,
-          userId: user.id,
-          emoji: emoji
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add reaction');
-      }
-
-      const result = await response.json();
+      const result = await chatRouter.AddReaction(messageToReact.id, user.id.toString(), emoji);
 
       // Emit socket event to notify other clients
       if (socket) {
@@ -1116,16 +1062,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/DeleteMessage/${message.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete message');
-      }
+      await chatRouter.DeleteMessage(message.id);
 
       // Remove message from local state
       // Note: We can't directly remove from messages array here since it's passed as prop
@@ -1136,7 +1073,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       console.error('Error deleting message:', error);
       alert('Failed to delete message. Please try again.');
     }
-  }, []);
+  }, [chatRouter]);
 
   // Keyboard event handler for closing popups
   useEffect(() => {
