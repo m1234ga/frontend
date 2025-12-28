@@ -87,6 +87,27 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     }
   }, [chatRouter]);
 
+
+  // Helper to parse tags from tagsname string
+  const parseChatTags = useCallback((chat: ChatModel & { tagsname?: string }): ChatTag[] => {
+    let parsedTags: ChatTag[] = [];
+    if (chat.tagsname && typeof chat.tagsname === 'string') {
+      const tagData = chat.tagsname.split('-_-').filter((data: string) => data.trim() !== '');
+      parsedTags = tagData.map((data: string, index: number) => {
+        const [tagName, tagId] = data.split('_-_');
+        return {
+          id: tagId || `parsed-${chat.id}-${index}`,
+          name: tagName || data.trim(),
+          color: "black",
+          status: 'available' as const,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+      });
+    }
+    return parsedTags;
+  }, []);
+
   const fetchConversations = useCallback(async (reset = false) => {
     try {
       if (isFetching.current) return;
@@ -124,25 +145,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           ? (pageResult as PageResult).chats!
           : [];
 
-      // Parse tagsname field and convert to ChatTag array
-      const chatsWithParsedTags = chats.map((chat: ChatModel & { tagsname?: string }) => {
-        let parsedTags: ChatTag[] = [];
-
-        if (chat.tagsname && typeof chat.tagsname === 'string') {
-          const tagData = chat.tagsname.split('-_-').filter((data: string) => data.trim() !== '');
-          parsedTags = tagData.map((data: string, index: number) => {
-            const [tagName, tagId] = data.split('_-_');
-            return {
-              id: tagId || `parsed-${chat.id}-${index}`,
-              name: tagName || data.trim(),
-              color: "black",
-              status: 'available' as const,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            };
-          });
-        }
-
+      // Parse tagsname field and convert to ChatTag array using common helper
+      const chatsWithParsedTags = chats.map((chat: ChatFromApi) => {
+        const parsedTags = parseChatTags(chat);
         return {
           ...chat,
           // Normalize lastMessageTime here
@@ -175,7 +180,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       setIsFetchingMore(false);
       setIsLoading(false);
     }
-  }, [token, activeTab]);
+  }, [token, activeTab, parseChatTags]);
 
   // Fetch archived chats
   const fetchArchivedChats = useCallback(async () => {
@@ -366,18 +371,10 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       const existingIndex = prevConversations.findIndex(chat => chat.id === updatedChat.id);
       let newConversations;
 
-      // Parse tagsname field for the updated chat
+      // Parse tagsname field for the updated chat using common helper
       let parsedTags: ChatTag[] | null = null;
-      if (updatedChat.tagsname && typeof updatedChat.tagsname === 'string') {
-        const tagNames = updatedChat.tagsname.split('-_-').filter((name: string) => name.trim() !== '');
-        parsedTags = tagNames.map((tagName: string, index: number) => ({
-          id: `parsed-${updatedChat.id}-${index}`,
-          name: tagName.trim(),
-          color: "black",
-          status: 'available' as const,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }));
+      if (updatedChat.tagsname) {
+        parsedTags = parseChatTags(updatedChat);
       }
 
       if (existingIndex >= 0) {
@@ -410,7 +407,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
       return sortedConversations;
     });
-  }, []);
+  }, [parseChatTags]);
 
   const handleChatPresence = useCallback((data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => {
     setConversations(prevConversations => {
