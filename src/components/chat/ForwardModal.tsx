@@ -9,7 +9,7 @@ interface ForwardModalProps {
   onClose: () => void;
   message: ChatMessage;
   conversations: ChatModel[];
-  onForward: (message: ChatMessage, targetChatId: string) => void;
+  onForward: (message: ChatMessage, targetChatId: string, targetPhone: string) => void;
 }
 
 export const ForwardModal: React.FC<ForwardModalProps> = ({
@@ -41,9 +41,12 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   const handleForward = async () => {
     if (!selectedChatId) return;
 
+    const targetConversation = conversations.find(c => c.id === selectedChatId);
+    if (!targetConversation) return;
+
     setIsForwarding(true);
     try {
-      await onForward(message, selectedChatId);
+      await onForward(message, selectedChatId, targetConversation.phone || selectedChatId);
       onClose();
     } catch (error) {
       console.error('Error forwarding message:', error);
@@ -63,11 +66,11 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
       onClick={onClose}
     >
-      <div 
+      <div
         className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl w-full max-w-md mx-4 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
@@ -155,11 +158,10 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
                 <button
                   key={conversation.id}
                   onClick={() => setSelectedChatId(conversation.id)}
-                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                    selectedChatId === conversation.id
-                      ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700'
-                      : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600'
-                  }`}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedChatId === conversation.id
+                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700'
+                    : 'bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600'
+                    }`}
                 >
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center">

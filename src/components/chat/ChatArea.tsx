@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, Heart, FileText, Star, User, Search, Plus, Image as ImageIcon } from 'lucide-react';
+import { X, Heart, FileText, Star, User, Search, Plus, Image as ImageIcon, Check, XCircle, Send, Smile, Paperclip, MoreVertical, Edit, Trash2, Reply, Pin, Share2 } from 'lucide-react';
 import { EmptyArea } from '@/components/chat/EmptyArea';
 import { toast } from 'react-hot-toast';
 import MessageList from './MessageList';
@@ -26,6 +26,7 @@ interface ChatAreaProps {
   onMessageUpdate?: (message: ChatMessage & { tempId?: string }) => void;
   conversations?: ChatModel[];
   onLoadMoreMessages?: () => Promise<boolean>;
+  onClose?: () => void;
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
@@ -35,8 +36,38 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onNewMessage,
   onMessageUpdate,
   conversations = [],
-  onLoadMoreMessages
+  onLoadMoreMessages,
+  onClose
 }) => {
+  // --- Highlight Component ---
+  const HighlightMessageCard = ({ message, formatTime, onAction, actionIcon, actionTitle, footer }: any) => (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 shadow-soft-sm hover:shadow-soft-md transition-all duration-300 group">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center space-x-2 mb-1">
+            <span className="text-xs font-bold text-soft-primary">
+              {message.isFromMe ? 'Me' : (message.pushName || 'Contact')}
+            </span>
+            <span className="text-[10px] text-gray-400">
+              {formatTime(message.timeStamp || message.timestamp)}
+            </span>
+          </div>
+          <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed break-words line-clamp-3 group-hover:line-clamp-none transition-all">
+            {message.message}
+          </p>
+          {footer}
+        </div>
+        <button
+          onClick={onAction}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors ml-2 flex-shrink-0"
+          title={actionTitle}
+        >
+          {actionIcon}
+        </button>
+      </div>
+    </div>
+  );
+
   const [newMessage, setNewMessage] = useState('');
   // typing indicator tracked via typingUsers set
   // We track typing users in `typingUsers`. Keep a noop setter to satisfy existing call sites.
@@ -51,8 +82,58 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [recordingStream, setRecordingStream] = useState<MediaStream | null>(null);
 
-  const [showFavoritesPopup, setShowFavoritesPopup] = useState(false);
-  const [favoriteMessages, setFavoriteMessages] = useState<ChatMessage[]>([]);
+  const [showSecondarySidebar, setShowSecondarySidebar] = useState(false);
+  const [secondarySidebarType, setSecondarySidebarType] = useState<'favorites' | 'pinned' | 'notes'>('favorites');
+
+  const favoriteMessages = useMemo(() => {
+    return messages.filter(m => {
+      // Check if ID is in local storage or if we have a way to track favorites
+      // For now, let's assume favorites are tracked via local storage if not in DB
+      const favorites = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('favoriteMessages') || '[]') : [];
+      return favorites.includes(m.id);
+    });
+  }, [messages]);
+
+  const pinnedMessages = useMemo(() => {
+    return messages.filter(m => m.isPinned);
+  }, [messages]);
+
+  const notedMessages = useMemo(() => {
+    return messages.filter(m => m.note && m.note.trim() !== '');
+  }, [messages]);
+
+  const toggleFavorite = useCallback((message: ChatMessage) => {
+    const favorites = JSON.parse(localStorage.getItem('favoriteMessages') || '[]');
+    const index = favorites.indexOf(message.id);
+    if (index === -1) {
+      favorites.push(message.id);
+    } else {
+      favorites.splice(index, 1);
+    }
+    localStorage.setItem('favoriteMessages', JSON.stringify(favorites));
+    // We need to trigger a re-render of useMemo, but since messages doesn't change, 
+    // we might need a dummy state or just rely on the fact that toggleFavorite is called 
+    // and we can force an update if needed. Better yet, use a state for favorites IDs.
+  }, []);
+
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  useEffect(() => {
+    setFavoriteIds(JSON.parse(localStorage.getItem('favoriteMessages') || '[]'));
+  }, []);
+
+  const favoriteMessagesReal = useMemo(() => {
+    return messages.filter(m => favoriteIds.includes(m.id));
+  }, [messages, favoriteIds]);
+
+  const toggleFavoriteReal = useCallback((message: ChatMessage) => {
+    setFavoriteIds(prev => {
+      const newIds = prev.includes(message.id)
+        ? prev.filter(id => id !== message.id)
+        : [...prev, message.id];
+      localStorage.setItem('favoriteMessages', JSON.stringify(newIds));
+      return newIds;
+    });
+  }, []);
   const [showTemplatePopup, setShowTemplatePopup] = useState(false);
   const [showForwardModal, setShowForwardModal] = useState(false);
   const [messageToForward, setMessageToForward] = useState<ChatMessage | null>(null);
@@ -838,19 +919,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     setShowTemplatePopup(prev => !prev);
   }, []);
 
-
-  // Favorite messages functions
-  const toggleFavorite = useCallback((message: ChatMessage) => {
-    setFavoriteMessages(prev => {
-      const isFavorite = prev.some(fav => fav.id === message.id);
-      if (isFavorite) {
-        return prev.filter(fav => fav.id !== message.id);
-      } else {
-        return [...prev, message];
-      }
-    });
-  }, []);
-
   const sendTemplateMessage = (template: { id: number, name: string, content: string }) => {
     setNewMessage(template.content);
     setShowTemplatePopup(false);
@@ -909,28 +977,34 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
+
   // Forward message functions
   const handleForwardMessage = useCallback((message: ChatMessage) => {
     setMessageToForward(message);
     setShowForwardModal(true);
   }, []);
 
-  const handleForward = async (message: ChatMessage, targetChatId: string) => {
+  const handleForward = async (message: ChatMessage, targetChatId: string, targetPhone: string) => {
     try {
-      message.phone = selectedConversation?.phone || '';
-      const result = await chatRouter.ForwardMessage(message, targetChatId, user?.id?.toString() || 'current_user');
-
-      // Emit socket event to notify other clients
-      if (socket) {
-        socket.emit('message_forwarded', {
-          forwardedMessage: result.forwardedMessage,
-          targetChatId: targetChatId
-        });
+      if (!socket) {
+        toast.error('Connection lost. Please try again.');
+        return;
       }
 
-      console.log('Message forwarded successfully:', result);
+      // Instead of calling API, we now emit message_forwarded event
+      // The backend will handle the forwarding logic
+      socket.emit('message_forwarded', {
+        originalMessage: message,
+        targetChatId: targetChatId,
+        targetPhone: targetPhone,
+        senderId: user?.id?.toString() || 'current_user'
+      });
+
+      console.log('Message forward request emitted with phone:', targetPhone);
+      toast.success('Message forwarded successfully');
     } catch (error) {
       console.error('Error forwarding message:', error);
+      toast.error('Failed to forward message');
       throw error;
     }
   };
@@ -1079,8 +1153,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (showFavoritesPopup) {
-          setShowFavoritesPopup(false);
+        if (showSecondarySidebar) {
+          setShowSecondarySidebar(false);
         }
         if (showTemplatePopup) {
           setShowTemplatePopup(false);
@@ -1099,21 +1173,24 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         if (openMessageMenuId) {
           setOpenMessageMenuId(null);
         }
+
+        // If no popups are open, close the chat area
+        if (!showSecondarySidebar && !showTemplatePopup && !showForwardModal && !replyToMessage && !showReactionPicker && !openMessageMenuId) {
+          if (onClose) onClose();
+        }
       }
     };
 
-    if (showFavoritesPopup || showTemplatePopup || showForwardModal || replyToMessage || showReactionPicker || openMessageMenuId) {
-      document.addEventListener('keydown', handleKeyDown);
-    }
+    document.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showFavoritesPopup, showTemplatePopup, showForwardModal, replyToMessage, showReactionPicker, openMessageMenuId]);
+  }, [showSecondarySidebar, showTemplatePopup, showForwardModal, replyToMessage, showReactionPicker, openMessageMenuId, onClose]);
 
   if (!selectedConversation) {
     return (
-      <EmptyArea />
+      <EmptyArea conversations={conversations} currentUser={user} />
     );
   }
 
@@ -1126,8 +1203,12 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         chatStatus={chatStatus}
         onAssignClick={handleAssignChat}
         onStatusClick={handleStatusButtonClick}
-        favoriteCount={favoriteMessages.length}
-        onFavoritesClick={() => setShowFavoritesPopup(true)}
+        favoriteCount={favoriteMessagesReal.length}
+        onFavoritesClick={() => {
+          setSecondarySidebarType('favorites');
+          setShowSecondarySidebar(true);
+        }}
+        onClose={onClose}
       />
 
       {/* Messages Area */}
@@ -1158,8 +1239,8 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
         <MessageList
           messages={messages}
-          favoriteMessages={favoriteMessages}
-          toggleFavorite={toggleFavorite}
+          favoriteMessages={favoriteMessagesReal}
+          toggleFavorite={toggleFavoriteReal}
           onForward={handleForwardMessage}
           onDelete={handleDeleteMessage}
           onEdit={handleEditMessage}
@@ -1243,59 +1324,125 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
 
 
-      {/* Favorites Popup - Right Side */}
-      {showFavoritesPopup && (
+      {/* Secondary Sidebar (Favorites, Pinned, Notes) */}
+      {showSecondarySidebar && (
         <div
-          className="fixed inset-0 bg-black/50 z-50"
-          onClick={() => setShowFavoritesPopup(false)}
+          className="fixed inset-0 bg-black/50 z-50 flex justify-end"
+          onClick={() => setShowSecondarySidebar(false)}
         >
           <div
-            className="absolute right-0 top-0 h-full w-96 bg-white dark:bg-gray-900 shadow-2xl overflow-y-auto"
+            className="h-full w-96 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden flex flex-col animate-slide-in-right"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6">
+            {/* Sidebar Header with Tabs */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-800">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                  <Star className="w-5 h-5 mr-2 text-yellow-500" />
-                  Favorite Messages
-                </h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Chat Highlights</h3>
                 <button
-                  onClick={() => setShowFavoritesPopup(false)}
-                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                  onClick={() => setShowSecondarySidebar(false)}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
-                  <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                  <X className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
 
-              <div className="space-y-3">
-                {favoriteMessages.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Heart className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-500 dark:text-gray-400">No favorite messages yet</p>
-                    <p className="text-sm text-gray-400 dark:text-gray-500">Click the heart icon on messages to add them to favorites</p>
-                  </div>
-                ) : (
-                  favoriteMessages.map((message) => (
-                    <div key={message.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <p className="text-sm text-gray-900 dark:text-white mb-1">{message.message}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatTime(message.timeStamp || message.timestamp)}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => toggleFavorite(message)}
-                          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors ml-2"
-                          title="Remove from favorites"
-                        >
-                          <Heart className="w-4 h-4 text-red-500 fill-current" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
+              <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                <button
+                  onClick={() => setSecondarySidebarType('favorites')}
+                  className={`flex-1 flex items-center justify-center py-2 px-3 rounded-lg text-sm font-medium transition-all ${secondarySidebarType === 'favorites' ? 'bg-white dark:bg-gray-700 shadow-sm text-soft-primary' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <Star className={`w-4 h-4 mr-2 ${secondarySidebarType === 'favorites' ? 'fill-current' : ''}`} />
+                  Favorites
+                </button>
+                <button
+                  onClick={() => setSecondarySidebarType('pinned')}
+                  className={`flex-1 flex items-center justify-center py-2 px-3 rounded-lg text-sm font-medium transition-all ${secondarySidebarType === 'pinned' ? 'bg-white dark:bg-gray-700 shadow-sm text-soft-primary' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Pinned
+                </button>
+                <button
+                  onClick={() => setSecondarySidebarType('notes')}
+                  className={`flex-1 flex items-center justify-center py-2 px-3 rounded-lg text-sm font-medium transition-all ${secondarySidebarType === 'notes' ? 'bg-white dark:bg-gray-700 shadow-sm text-soft-primary' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Notes
+                </button>
               </div>
+            </div>
+
+            {/* Sidebar Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {secondarySidebarType === 'favorites' && (
+                <div className="space-y-3">
+                  {favoriteMessagesReal.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Star className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">No favorite messages</p>
+                    </div>
+                  ) : (
+                    favoriteMessagesReal.map((message) => (
+                      <HighlightMessageCard
+                        key={message.id}
+                        message={message}
+                        formatTime={formatTime}
+                        onAction={() => toggleFavoriteReal(message)}
+                        actionIcon={<Star className="w-4 h-4 text-amber-400 fill-current" />}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+
+              {secondarySidebarType === 'pinned' && (
+                <div className="space-y-3">
+                  {pinnedMessages.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Check className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">No pinned messages</p>
+                    </div>
+                  ) : (
+                    pinnedMessages.map((message) => (
+                      <HighlightMessageCard
+                        key={message.id}
+                        message={message}
+                        formatTime={formatTime}
+                        onAction={() => handlePinMessage(message, false)}
+                        actionTitle="Unpin"
+                        actionIcon={<XCircle className="w-4 h-4 text-red-500" />}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+
+              {secondarySidebarType === 'notes' && (
+                <div className="space-y-3">
+                  {notedMessages.length === 0 ? (
+                    <div className="text-center py-12">
+                      <FileText className="w-12 h-12 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+                      <p className="text-gray-500 dark:text-gray-400">No messages with notes</p>
+                    </div>
+                  ) : (
+                    notedMessages.map((message) => (
+                      <HighlightMessageCard
+                        key={message.id}
+                        message={message}
+                        formatTime={formatTime}
+                        onAction={() => handleAddNoteToMessage(message, '')}
+                        actionTitle="Remove Note"
+                        actionIcon={<XCircle className="w-4 h-4 text-red-500" />}
+                        footer={
+                          <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border-l-2 border-amber-400 text-xs text-amber-800 dark:text-amber-200 rounded">
+                            <span className="font-bold block mb-1">Note:</span>
+                            {message.note}
+                          </div>
+                        }
+                      />
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

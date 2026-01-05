@@ -15,7 +15,7 @@ export default function ChatPage() {
   const [selectedConversation, setSelectedConversation] = useState<ChatModel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const socket = useSocket();
-  const { token, authenticated, loading, logout } = useAuth();
+  const { token, authenticated, loading, logout, user } = useAuth();
   const router = useRouter();
 
   // Redirect if not authenticated
@@ -36,19 +36,47 @@ export default function ChatPage() {
   const handleSelectConversation = async (conversation: ChatModel) => {
     const data = await GetConversation(conversation.id, 10);
 
-    // Update local state immediately to set unreadCount to 0
-    const updatedConversation = { ...conversation, unreadCount: 0 };
+    // Auto-assign chat to current user if not already assigned
+    let updatedConversation = { ...conversation, unreadCount: 0 };
+
+    if (user?.id && (!conversation.assignedTo || conversation.assignedTo !== user.id)) {
+      try {
+        await ChatRouter(token || "").AssignChat(
+          conversation.id,
+          user.id,
+          user.id // assignedBy is also the current user
+        );
+
+        // Update the conversation with the new assignment
+        updatedConversation = { ...updatedConversation, assignedTo: user.id };
+
+        // Update conversations list with new assignment
+        setConversations(prev =>
+          prev.map(conv =>
+            conv.id === conversation.id
+              ? { ...conv, assignedTo: user.id, unreadCount: 0 }
+              : conv
+          )
+        );
+
+        console.log(`Chat ${conversation.id} auto-assigned to user ${user.id}`);
+      } catch (error) {
+        console.error('Error auto-assigning chat:', error);
+        // Continue even if assignment fails
+      }
+    } else {
+      // Just update unread count if already assigned to current user
+      setConversations(prev =>
+        prev.map(conv =>
+          conv.id === conversation.id
+            ? { ...conv, unreadCount: 0 }
+            : conv
+        )
+      );
+    }
+
     setSelectedConversation(updatedConversation);
     setMessages(data);
-
-    // Update conversations list immediately
-    setConversations(prev =>
-      prev.map(conv =>
-        conv.id === conversation.id
-          ? { ...conv, unreadCount: 0 }
-          : conv
-      )
-    );
 
     // Mark chat as read when opened (backend call)
     try {
@@ -316,6 +344,10 @@ export default function ChatPage() {
         onMessageUpdate={handleMessageUpdate}
         conversations={conversations}
         onLoadMoreMessages={handleLoadMoreMessages}
+        onClose={() => {
+          setSelectedConversation(null);
+          setMessages([]);
+        }}
       />
     </div>
   );

@@ -51,7 +51,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [newTagName, setNewTagName] = useState('');
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chats' | 'archived' | 'assigned' | 'open' | 'closed'>('chats');
+  const [activeTab, setActiveTab] = useState<'chats' | 'archived' | 'assigned' | 'open' | 'closed'>('open');
   const [archivedChats, setArchivedChats] = useState<ChatModel[]>([]);
   const [assignedChats, setAssignedChats] = useState<ChatModel[]>([]);
   const [openChats, setOpenChats] = useState<ChatModel[]>([]);
@@ -1195,15 +1195,6 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
           {/* Tabs */}
           <div className="flex border-b theme-border-primary overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('chats')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'chats'
-                ? 'theme-text-primary border-b-2 border-cyan-500'
-                : 'theme-text-secondary hover:theme-text-primary'
-                }`}
-            >
-              All
-            </button>
             <button
               onClick={() => setActiveTab('open')}
               className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'open'

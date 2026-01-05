@@ -135,7 +135,7 @@ const ChatTab: React.FC<ChatTabProps> = ({
               {/* Bottom Row: Message/Typing and Badges */}
               <div className="mt-1 flex items-center justify-between min-h-[20px]">
                 <div className="flex-1 min-w-0">
-                  {conversation.isTyping ? (
+                  {conversation.isTyping && conversation.isOnline && conversation.status !== 'closed' && !conversation.isArchived ? (
                     <TypingIndicator className="flex items-center space-x-1 text-soft-primary text-xs" dotClassName="bg-soft-primary" />
                   ) : (
                     <div className="flex items-center space-x-2">

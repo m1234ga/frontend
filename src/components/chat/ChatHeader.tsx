@@ -16,9 +16,10 @@ interface ChatHeaderProps {
   onStatusClick: () => void;
   favoriteCount: number;
   onFavoritesClick: () => void;
+  onClose?: () => void;
 }
 
-const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline, typingUsers, chatStatus, onAssignClick, onStatusClick, favoriteCount, onFavoritesClick }) => {
+const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline, typingUsers, chatStatus, onAssignClick, onStatusClick, favoriteCount, onFavoritesClick, onClose }) => {
   return (
     <div className="glass-panel sticky top-0 z-30 mb-2 mx-4 mt-2 px-6 py-4 flex items-center justify-between">
       <div className="flex items-center space-x-4 flex-1">
@@ -39,6 +40,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline,
             <h2 className="font-bold text-gray-900 dark:text-white text-lg truncate tracking-tight">
               {selectedConversation.name?.split('-_-')[0]}
             </h2>
+            <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">
+              ({selectedConversation.phone})
+            </span>
             {selectedConversation.unreadCount > 0 && (
               <span className="bg-soft-primary text-white text-xs rounded-full px-2 py-0.5 font-bold shadow-soft-sm">{selectedConversation.unreadCount}</span>
             )}
@@ -92,6 +96,19 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline,
             <span className="absolute -top-1 -right-1 bg-soft-primary text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-sm">{favoriteCount}</span>
           )}
         </button>
+
+        {onClose && (
+          <>
+            <div className="h-8 w-px bg-gray-200 dark:bg-slate-700 mx-2"></div>
+            <button
+              onClick={onClose}
+              className="p-2.5 hover:bg-red-50 text-gray-400 hover:text-red-500 dark:hover:bg-red-900/20 transition-all duration-200 active:scale-90"
+              title="Close Chat"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
