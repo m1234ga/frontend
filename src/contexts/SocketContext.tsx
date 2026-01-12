@@ -2,11 +2,11 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import { Chat,ChatMessage } from '@shared/Models';
+import { Chat, ChatMessage } from '@shared/Models';
 
 interface SocketContextType {
   socket: Socket | null;
-  sendMessage: (message:ChatMessage) => void;
+  sendMessage: (message: ChatMessage) => void;
   joinConversation: (conversationId: string) => void;
   leaveConversation: (conversationId: string) => void;
   isConnected: boolean;
@@ -15,6 +15,7 @@ interface SocketContextType {
   onChatUpdate: (callback: (chat: Chat) => void) => void;
   onUserTyping: (callback: (data: { userId: string; isTyping: boolean; conversationId: string }) => void) => void;
   onChatPresence: (callback: (data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) => void;
+  onReactionUpdate: (callback: (data: { messageId: string; reactions: any[] }) => void) => void;
   emitTyping: (conversationId: string, isTyping: boolean) => void;
   on: (event: string, callback: (...args: unknown[]) => void) => void;
   off: (event: string, callback: (...args: unknown[]) => void) => void;
@@ -45,13 +46,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const chatUpdateCallbackRef = useRef<((chat: Chat) => void) | null>(null);
   const userTypingCallbackRef = useRef<((data: { userId: string; isTyping: boolean; conversationId: string }) => void) | null>(null);
   const chatPresenceCallbackRef = useRef<((data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) | null>(null);
+  const reactionUpdateCallbackRef = useRef<((data: { messageId: string; reactions: any[] }) => void) | null>(null);
 
   useEffect(() => {
     if (user && token) {
       // Use SOCKET_URL if set, otherwise fall back to API_URL, then default
-      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
-                       process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 
-                       'http://localhost:5000';
+      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL ||
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ||
+        'http://localhost:5000';
       const newSocket = io(socketUrl, {
         auth: {
           token
@@ -111,6 +113,14 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         }
       });
 
+      // Listen for reaction updates
+      newSocket.on('reaction_updated', (data: { messageId: string; reactions: any[] }) => {
+        console.log('Reaction updated:', data);
+        if (reactionUpdateCallbackRef.current) {
+          reactionUpdateCallbackRef.current(data);
+        }
+      });
+
       setSocket(newSocket);
 
       return () => {
@@ -119,10 +129,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
   }, [user, token]);
 
-  const sendMessage = (message:ChatMessage) => {
-    
+  const sendMessage = (message: ChatMessage) => {
+
     if (socket && user) {
-      message.phone=message.phone || message.chatId +'@g.us';
+      message.phone = message.phone || message.chatId + '@g.us';
       socket.emit('send_message', message);
     }
   };
@@ -169,7 +179,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     messageUpdateCallbackRef.current = callback;
   }, []);
 
-  const onChatUpdate = useCallback((callback: (chat:Chat) => void) => {
+  const onChatUpdate = useCallback((callback: (chat: Chat) => void) => {
     chatUpdateCallbackRef.current = callback;
   }, []);
 
@@ -179,6 +189,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
   const onChatPresence = useCallback((callback: (data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) => {
     chatPresenceCallbackRef.current = callback;
+  }, []);
+
+  const onReactionUpdate = useCallback((callback: (data: { messageId: string; reactions: any[] }) => void) => {
+    reactionUpdateCallbackRef.current = callback;
   }, []);
 
   const value = {
@@ -192,6 +206,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     onChatUpdate,
     onUserTyping,
     onChatPresence,
+    onReactionUpdate,
     emitTyping,
     on,
     off

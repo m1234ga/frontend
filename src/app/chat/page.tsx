@@ -131,18 +131,29 @@ export default function ChatPage() {
     );
   }, []);
 
+  const handleReactionUpdate = useCallback((data: { messageId: string; reactions: any[] }) => {
+    setMessages(prev => prev.map(msg =>
+      msg.id === data.messageId
+        ? { ...msg, reactions: data.reactions }
+        : msg
+    ));
+  }, []);
+
   // Set up Socket.IO event listeners
   useEffect(() => {
     if (socket) {
       socket.on('message_sent', handleMessageSent as (...args: unknown[]) => void);
       socket.on('message_error', handleMessageError as (...args: unknown[]) => void);
+      socket.onReactionUpdate(handleReactionUpdate);
 
       return () => {
         socket.off('message_sent', handleMessageSent as (...args: unknown[]) => void);
         socket.off('message_error', handleMessageError as (...args: unknown[]) => void);
+        // Note: SocketContext might not expose 'offReactionUpdate', but 'onReactionUpdate' uses a ref, so it's fine.
+        // Actually best to ensure cleanup if possible, but context design seems to use refs for stable callbacks.
       };
     }
-  }, [socket, handleMessageSent, handleMessageError]);
+  }, [socket, handleMessageSent, handleMessageError, handleReactionUpdate]);
 
   const handleSendMessage = async (content: string) => {
     if (selectedConversation) {

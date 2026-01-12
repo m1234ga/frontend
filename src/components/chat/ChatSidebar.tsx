@@ -495,21 +495,29 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     onChatPresence(handleChatPresence);
   }, [onChatUpdate, handleChatUpdate, onChatPresence, handleChatPresence]);
 
+  const refreshAllData = useCallback(async () => {
+    setIsLoading(true);
+    await fetchConversations(true);
+    await Promise.all([
+      fetchContacts(),
+      fetchArchivedChats(),
+      fetchAssignedChats(),
+      fetchOpenChats(),
+      fetchClosedChats()
+    ]);
+  }, [fetchConversations, fetchContacts, fetchArchivedChats, fetchAssignedChats, fetchOpenChats, fetchClosedChats]);
+
   useEffect(() => {
     // reset the paginated list on mount or tab change
-    const initializeData = async () => {
-      setIsLoading(true);
-      await fetchConversations(true);
-      await Promise.all([
-        fetchContacts(),
-        fetchArchivedChats(),
-        fetchAssignedChats(),
-        fetchOpenChats(),
-        fetchClosedChats()
-      ]);
-    };
-    initializeData();
-  }, [activeTab, fetchConversations, fetchContacts, fetchArchivedChats, fetchAssignedChats, fetchOpenChats, fetchClosedChats]);
+    refreshAllData();
+  }, [activeTab, refreshAllData]);
+
+  // Update dashboard when returning to empty area
+  useEffect(() => {
+    if (!selectedConversationId) {
+      refreshAllData();
+    }
+  }, [selectedConversationId, refreshAllData]);
 
   // Infinite scroll: attach to sidebar container
   useEffect(() => {
