@@ -1105,7 +1105,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     if (!messageToReact || !user?.id) return;
 
     try {
-      const result = await chatRouter.AddReaction(messageToReact.id, user.id.toString(), emoji);
+      const result = await chatRouter.AddReaction(messageToReact.id, user.id.toString(), emoji, selectedConversation.phone || selectedConversation.id);
 
       // Emit socket event to notify other clients
       if (socket) {

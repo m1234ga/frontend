@@ -625,7 +625,7 @@ export default function Chat(token: string) {
     }
   }
 
-  async function AddReaction(messageId: string, userId: string, emoji: string) {
+  async function AddReaction(messageId: string, userId: string, emoji: string, phone: string) {
     try {
       const response = await fetch(apiUrl + `/AddReaction`, {
         method: 'POST',
@@ -636,7 +636,8 @@ export default function Chat(token: string) {
         body: JSON.stringify({
           messageId,
           userId,
-          emoji
+          emoji,
+          phone
         })
       });
 
