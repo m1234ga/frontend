@@ -155,7 +155,7 @@ export default function ChatPage() {
     }
   }, [socket, handleMessageSent, handleMessageError, handleReactionUpdate]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, replyMessage?: ChatMessage) => {
     if (selectedConversation) {
       const newMessage: ChatMessage = {
         id: Date.now().toString(),
@@ -170,6 +170,8 @@ export default function ChatPage() {
         isFromMe: true,
         phone: selectedConversation.phone,
         pushName: selectedConversation.name,
+        replyToMessage: replyMessage,
+        replyToMessageId: replyMessage?.id
       };
 
       // Add message to UI immediately for better UX with sending status

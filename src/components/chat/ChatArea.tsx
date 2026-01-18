@@ -21,7 +21,7 @@ import TypingIndicator from './TypingIndicator';
 interface ChatAreaProps {
   selectedConversation: ChatModel | null;
   messages: ChatMessage[];
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, replyMessage?: ChatMessage) => void;
   onNewMessage?: (message: ChatMessage) => void;
   onMessageUpdate?: (message: ChatMessage & { tempId?: string }) => void;
   conversations?: ChatModel[];
@@ -587,13 +587,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
 
   const handleSendMessage = () => {
     if (newMessage.trim()) {
-      // Send text message directly (no temp message step)
+      // Send message (reply or regular) using the same handler
       if (replyToMessage) {
-        // Send reply message
-        sendReplyMessage(replyToMessage.id, newMessage.trim());
+        onSendMessage(newMessage.trim(), replyToMessage);
         setReplyToMessage(null);
       } else {
-        // Send regular message directly
         onSendMessage(newMessage.trim());
       }
 
@@ -1009,30 +1007,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  // Send reply message function
-  const sendReplyMessage = async (originalMessageId: string, replyMessage: string) => {
-    try {
-      const result = await chatRouter.ReplyToMessage(
-        originalMessageId,
-        replyMessage,
-        selectedConversation?.id || '',
-        user?.id?.toString() || 'current_user'
-      );
 
-      // Emit socket event to notify other clients
-      if (socket) {
-        socket.emit('message_sent', {
-          message: result.replyMessage,
-          chatId: selectedConversation?.id
-        });
-      }
-
-      console.log('Reply sent successfully:', result);
-    } catch (error) {
-      console.error('Error sending reply:', error);
-      alert('Failed to send reply. Please try again.');
-    }
-  };
 
   // Edit message function
   const handleEditMessage = useCallback(async (message: ChatMessage, newMessage: string) => {
