@@ -84,11 +84,40 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const fetchContacts = useCallback(async () => {
     try {
-      const contacts = await chatRouter.GetContacts();
-      setAllContacts(contacts);
+      const contacts = await chatRouter.GetCleanedContacts();
+      if (contacts && Array.isArray(contacts)) {
+        const mappedContacts: Contact[] = contacts.map((c: any) => ({
+          id: c.phone || '',
+          name: c.first_name || c.full_name || c.push_name || c.business_name || c.phone || 'Unknown',
+          phone: c.phone || '',
+          email: '',
+          address: '',
+          state: '',
+          zip: '',
+          country: '',
+          lastMessage: '',
+          lastMessageTime: new Date(),
+          unreadCount: 0,
+          isTyping: false,
+          isOnline: false,
+          Image: '',
+          lastSeen: new Date(),
+          ChatId: c.phone || '',
+          tags: []
+        }));
+        setAllContacts(mappedContacts);
+      } else {
+        const contacts = await chatRouter.GetContacts();
+        setAllContacts(contacts);
+      }
     } catch (error) {
       console.error('Error fetching contacts:', error);
-      setAllContacts([]);
+      try {
+        const contacts = await chatRouter.GetContacts();
+        setAllContacts(contacts);
+      } catch (e) {
+        setAllContacts([]);
+      }
     } finally {
       setIsLoading(false);
     }

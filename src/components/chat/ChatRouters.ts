@@ -22,6 +22,24 @@ export default function Chat(token: string) {
     }
   };
 
+  async function GetCleanedContacts() {
+    try {
+      const response = await fetch(apiUrl + '/GetCleanedContacts', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Error fetching cleaned contacts:', error);
+      return "Error";
+    }
+  };
+
   async function GetChats() {
     try {
       const response = await fetch(apiUrl + '/GetChats', {
@@ -849,6 +867,7 @@ export default function Chat(token: string) {
 
   return {
     GetContacts,
+    GetCleanedContacts,
     GetChats,
     GetMessagesById,
     SendImage,
