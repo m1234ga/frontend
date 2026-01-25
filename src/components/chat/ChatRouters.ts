@@ -115,12 +115,13 @@ export default function Chat(token: string) {
       return "Error"
     }
   };
-  async function SendImage(phone: string, imageFile: File, caption?: string) {
+  async function SendImage(phone: string, imageFile: File, caption?: string, replyToId?: string) {
     try {
       const formData = new FormData();
       formData.append('image', imageFile);
       formData.append('phone', phone);
       if (caption) formData.append('message', caption);
+      if (replyToId) formData.append('replyToId', replyToId);
 
       const response = await fetch(apiUrl + '/sendImage', {
         method: 'POST',
@@ -139,12 +140,13 @@ export default function Chat(token: string) {
     }
   };
 
-  async function SendVideo(phone: string, videoFile: File, caption?: string) {
+  async function SendVideo(phone: string, videoFile: File, caption?: string, replyToId?: string) {
     try {
       const formData = new FormData();
       formData.append('video', videoFile);
       formData.append('phone', phone);
       if (caption) formData.append('message', caption);
+      if (replyToId) formData.append('replyToId', replyToId);
 
       const response = await fetch(apiUrl + '/sendVideo', {
         method: 'POST',
@@ -163,11 +165,12 @@ export default function Chat(token: string) {
     }
   };
 
-  async function SendAudio(phone: string, audioFile: File) {
+  async function SendAudio(phone: string, audioFile: File, replyToId?: string) {
     try {
       const formData = new FormData();
       formData.append('audio', audioFile);
       formData.append('phone', phone);
+      if (replyToId) formData.append('replyToId', replyToId);
 
       const response = await fetch(apiUrl + '/sendAudio', {
         method: 'POST',

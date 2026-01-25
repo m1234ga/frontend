@@ -5,6 +5,8 @@ import { Pin, Check, CheckCheck } from 'lucide-react';
 import { ImageModal } from './ImageModal';
 import { MessageMenu } from './MessageMenu';
 import { ChatMessage, MessageReaction } from '../../../../Shared/Models';
+import { useAuth } from '@/contexts/AuthContext';
+import { useMemo } from 'react';
 
 const formatTime = (dateInput?: string | number | Date) => {
   if (!dateInput) return '';
@@ -57,6 +59,7 @@ export function Message({
   isMenuOpen?: boolean;
   onMenuToggle?: () => void;
 }) {
+  const { user } = useAuth();
   const isOwnMessage = message.isFromMe;
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
@@ -114,8 +117,18 @@ export function Message({
 
           {message.replyToMessage && (
             <div className={`mb-2 p-2 rounded-xl text-sm border-l-4 ${isOwnMessage ? 'bg-white/10 border-white/50 text-white/90' : 'bg-gray-50 dark:bg-slate-700/50 border-soft-primary text-gray-600 dark:text-gray-300'}`}>
-              <div className="font-semibold text-xs mb-1">Replying to:</div>
-              <div className="truncate opacity-80">{message.replyToMessage.message}</div>
+              <div className="font-semibold text-xs mb-1 flex items-center gap-1">
+                Replying to:
+                <span className="font-bold">
+                  {message.replyToMessage.isFromMe
+                    ? 'You'
+                    : (message.replyToMessage.pushName || message.replyToMessage.ContactId || 'Unknown')}
+                </span>
+              </div>
+              <div className="truncate opacity-80">
+                {message.replyToMessage.message ||
+                  (message.replyToMessage.mediaPath ? '[Media]' : '[Message]')}
+              </div>
             </div>
           )}
 
@@ -191,11 +204,28 @@ export function Message({
 
           {/* Reactions */}
           {message.reactions && message.reactions.length > 0 && (
-            <div className="absolute -bottom-3 right-4 flex space-x-1">
-              {Object.entries(message.reactions.reduce((acc: Record<string, number>, reaction: MessageReaction) => { acc[reaction.emoji] = (acc[reaction.emoji] || 0) + 1; return acc; }, {} as Record<string, number>)).map(([emoji, count]) => (
-                <div key={emoji} className="flex items-center space-x-1 px-2 py-0.5 bg-white dark:bg-slate-700 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 text-xs">
+            <div className="absolute -bottom-3 right-4 flex space-x-1 z-10">
+              {Object.entries(message.reactions.reduce((acc, r) => {
+                if (!acc[r.emoji]) acc[r.emoji] = [];
+                const name = r.userId === user?.id ? 'You' : (r.contactName || r.participant || 'Unknown');
+                acc[r.emoji].push(name);
+                return acc;
+              }, {} as Record<string, string[]>)).map(([emoji, names]) => (
+                <div key={emoji} className="relative group/reaction flex items-center space-x-1 px-2 py-0.5 bg-white dark:bg-slate-700 rounded-full shadow-sm border border-gray-100 dark:border-slate-600 text-xs cursor-help hover:scale-110 transition-transform">
                   <span>{emoji}</span>
-                  {(count as number) > 1 && <span className="text-gray-500 font-medium">{String(count)}</span>}
+                  {names.length > 1 && <span className="text-gray-500 dark:text-gray-400 font-medium">{names.length}</span>}
+
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/reaction:block z-50">
+                    <div className="bg-gray-900/90 backdrop-blur-sm text-white text-[10px] py-1.5 px-2.5 rounded-lg shadow-xl whitespace-nowrap min-w-[60px] text-center">
+                      <div className="flex flex-col gap-0.5">
+                        {names.map((name, i) => (
+                          <div key={i}>{name}</div>
+                        ))}
+                      </div>
+                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900/90"></div>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

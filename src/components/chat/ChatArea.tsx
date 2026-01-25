@@ -471,7 +471,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             isFromMe: true,
             phone: selectedConversation.phone ?? selectedConversation.id + '@g.us',
             // Add temporary mediaPath using the base64 data so image shows while sending
-            mediaPath: base64Image
+            mediaPath: base64Image,
+            replyToMessageId: replyToMessage?.id,
+            replyToMessage: replyToMessage || undefined
           };
 
           // Emit via Socket.IO
@@ -489,6 +491,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           toast.success('Image sent successfully');
           setPendingImage(null);
           setImageCaption('');
+          setReplyToMessage(null);
         } catch (error) {
           console.error('Error processing image:', error);
           toast.error('Failed to send image');
@@ -513,7 +516,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     const file = event.target.files?.[0];
     if (file && selectedConversation) {
       try {
-        const result = await chatRouter.SendVideo(selectedConversation.phone, file);
+        const result = await chatRouter.SendVideo(selectedConversation.phone, file, undefined, replyToMessage?.id);
         if (result === "Error") {
           throw new Error('Failed to send video');
         }
@@ -530,7 +533,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           isRead: false,
           isDelivered: false,
           isFromMe: true,
-          phone: selectedConversation.phone
+          phone: selectedConversation.phone,
+          replyToMessageId: replyToMessage?.id,
+          replyToMessage: replyToMessage || undefined
         };
 
         if (onNewMessage) {
@@ -538,6 +543,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
         }
 
         toast.success('Video sent successfully');
+        setReplyToMessage(null);
       } catch (error) {
         console.error('Error sending video:', error);
         toast.error('Failed to send video');
@@ -862,7 +868,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
               isDelivered: false,
               isFromMe: true,
               phone: selectedConversation.phone || selectedConversation.id,
-              mediaPath: base64Audio
+              mediaPath: base64Audio,
+              replyToMessageId: replyToMessage?.id,
+              replyToMessage: replyToMessage || undefined
             };
 
             // Emit audio via Socket.IO
@@ -878,6 +886,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             }
 
             toast.success('Audio sent successfully');
+            setReplyToMessage(null);
             cancelRecording();
           } catch (error) {
             console.error('Error processing audio:', error);
