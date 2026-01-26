@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, memo } from 'react';
 import Image from 'next/image';
-import { Pin, Check, CheckCheck } from 'lucide-react';
+import { Pin, Check, CheckCheck, FileText } from 'lucide-react';
 import { ImageModal } from './ImageModal';
 import { MessageMenu } from './MessageMenu';
 import { ChatMessage, MessageReaction } from '../../../../Shared/Models';
@@ -195,6 +195,42 @@ export function Message({
           {message.messageType === 'sticker' && (
             <div className="flex flex-col space-y-1">
               <Image src={buildMediaUrl(message.mediaPath, String(message.message || ''))} alt="sticker" className="w-32 h-32 object-contain hover:scale-105 transition-transform" width={128} height={128} />
+              <span className={`text-[10px] self-end flex items-center ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>
+                {formatTime(message.timeStamp)}
+                <MessageStatus isRead={message.isRead} isDelivered={message.isDelivered} isOwnMessage={isOwnMessage} />
+              </span>
+            </div>
+          )}
+
+          {(message.messageType === 'document' || message.messageType === 'media') && (
+            <div className="flex flex-col space-y-2 min-w-[240px]">
+              <div
+                onClick={() => window.open(buildMediaUrl(message.mediaPath), '_blank')}
+                className={`flex items-center space-x-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 border
+                  ${isOwnMessage
+                    ? 'bg-white/10 hover:bg-white/20 border-white/20'
+                    : 'bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 border-gray-100 dark:border-slate-600'
+                  }`}
+              >
+                <div className={`p-3 rounded-xl ${isOwnMessage ? 'bg-white/20' : 'bg-emerald-100 dark:bg-emerald-900/30'}`}>
+                  <FileText className={`w-6 h-6 ${isOwnMessage ? 'text-white' : 'text-emerald-600 dark:text-emerald-400'}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold truncate ${isOwnMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
+                    {message.message && message.message !== '[Document]' && message.message !== '[Media]'
+                      ? message.message
+                      : (message.mediaPath?.split('/').pop() || 'Attached File')}
+                  </p>
+                  <p className={`text-[11px] ${isOwnMessage ? 'text-white/60' : 'text-gray-500 dark:text-gray-400'}`}>
+                    Click to download
+                  </p>
+                </div>
+                <div className={`p-2 rounded-full ${isOwnMessage ? 'hover:bg-white/10' : 'hover:bg-gray-200 dark:hover:bg-slate-600'}`}>
+                  <svg className={`w-5 h-5 ${isOwnMessage ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </div>
+              </div>
               <span className={`text-[10px] self-end flex items-center ${isOwnMessage ? 'text-white/70' : 'text-gray-400'}`}>
                 {formatTime(message.timeStamp)}
                 <MessageStatus isRead={message.isRead} isDelivered={message.isDelivered} isOwnMessage={isOwnMessage} />

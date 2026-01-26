@@ -76,7 +76,8 @@ export default function ChatPage() {
     }
 
     setSelectedConversation(updatedConversation);
-    setMessages(data);
+    // Backend returns newest first, reverse to maintain [oldest -> newest] order
+    setMessages(Array.isArray(data) ? [...data].reverse() : []);
 
     // Mark chat as read when opened (backend call)
     try {
@@ -99,9 +100,15 @@ export default function ChatPage() {
 
     const moreMessages = await GetConversation(selectedConversation.id, 10, beforeTimestamp);
 
-    // Prepend older messages to the beginning
+    // Backend returns newest first, reverse the new batch before prepending
     if (Array.isArray(moreMessages) && moreMessages.length > 0) {
-      setMessages(prev => [...moreMessages, ...prev]);
+      const reversedMore = [...moreMessages].reverse();
+
+      setMessages(prev => {
+        const existingIds = new Set(prev.map(m => m.id));
+        const uniqueMore = reversedMore.filter(m => !existingIds.has(m.id));
+        return [...uniqueMore, ...prev];
+      });
       return true;
     }
     return false;
