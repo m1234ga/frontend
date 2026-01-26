@@ -51,7 +51,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [newTagName, setNewTagName] = useState('');
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'chats' | 'archived' | 'assigned' | 'open' | 'closed'>('open');
+  const [activeTab, setActiveTab] = useState<'chats' | 'archived' | 'assigned' | 'open' | 'closed'>('chats');
   const [archivedChats, setArchivedChats] = useState<ChatModel[]>([]);
   const [assignedChats, setAssignedChats] = useState<ChatModel[]>([]);
   const [openChats, setOpenChats] = useState<ChatModel[]>([]);
@@ -79,7 +79,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const { user, token } = useAuth();
   const chatRouter = useMemo(() => Chat(token || ""), [token]);
-  const { onChatUpdate, onChatPresence } = useSocket();
+  const { onChatUpdate, onChatPresence, sendMessage } = useSocket();
 
 
   const fetchContacts = useCallback(async () => {
@@ -310,44 +310,58 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     }
   };
 
-  // Create new chat function
-  const handleCreateNewChat = async (phoneNumber: string, contactName?: string) => {
-    if (!user?.id) return;
+  // Create new chat function (Socket.IO version)
+  const handleCreateNewChat = useCallback((phoneNumber: string, message?: string | null, contactName?: string) => {
+    if (!user?.id || !sendMessage) return;
 
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/CreateNewChat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phoneNumber,
-          contactName,
-          userId: user.id
-        })
-      });
+    const chatId = phoneNumber; // chatId is usually the phone number in this app
 
-      if (response.ok) {
-        const result = await response.json();
-        // Reset pagination and refresh conversations list (load page 1)
-        pageRef.current = 1;
-        await fetchConversations(true);
-        // Select the new chat
-        onSelectConversation(result.chat);
-        setShowNewChatModal(false);
-      } else if (response.status === 409) {
-        // Chat already exists
-        const result = await response.json();
-        alert('Chat already exists with this number');
-        // Optionally select the existing chat
-        onSelectConversation(result.existingChat);
-        setShowNewChatModal(false);
-      } else {
-        throw new Error('Failed to create chat');
-      }
-    } catch (error) {
-      console.error('Error creating new chat:', error);
-      alert('Failed to create chat. Please try again.');
+    // Close the new chat modal
+    setShowNewChatModal(false);
+
+    // If a text message was provided, send it via socket as a 'text' type message
+    if (message && message.trim()) {
+      const newMessage: ChatMessage = {
+        id: Date.now().toString(),
+        chatId: chatId,
+        message: message.trim(),
+        timeStamp: new Date(),
+        ContactId: user.id,
+        messageType: 'text',
+        isEdit: false,
+        isRead: false,
+        isDelivered: false,
+        isFromMe: true,
+        phone: phoneNumber,
+        pushName: user.username || 'Agent'
+      };
+
+      // Use the socket sendMessage hook
+      sendMessage(newMessage);
     }
-  };
+
+    // Immediately navigate to/select this chat in the UI
+    const existingChat = conversations.find(c => c.id === chatId || c.phone === phoneNumber);
+
+    if (existingChat) {
+      onSelectConversation(existingChat);
+    } else {
+      // If the chat doesn't exist in the local state yet, create a mock one so the user can see the ChatArea
+      const mockChat: any = {
+        id: chatId,
+        name: contactName || phoneNumber,
+        phone: phoneNumber,
+        contactId: phoneNumber,
+        lastMessage: message || '',
+        lastMessageTime: new Date(),
+        unreadCount: 0,
+        isOnline: false,
+        isTyping: false,
+        tags: []
+      };
+      onSelectConversation(mockChat);
+    }
+  }, [user, sendMessage, conversations, onSelectConversation]);
 
   // Fetch available users for assignment
   const fetchUsers = useCallback(async () => {
@@ -773,9 +787,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const initializeTags = useCallback(async () => {
     try {
       const dbTags = await chatRouter.GetTags();
-      const formattedTags: ChatTag[] = dbTags.map((tag: { tagId: number; tagName: string }) => ({
+      const formattedTags: ChatTag[] = dbTags.map((tag: any) => ({
         id: tag.tagId.toString(),
-        name: tag.tagName,
+        name: tag.tagName || tag.name || 'Unnamed Tag',
         color: "black",
         status: 'available' as const,
         createdAt: new Date(),
@@ -799,7 +813,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       const newTag = await chatRouter.CreateTag(name);
       const formattedTag: ChatTag = {
         id: newTag.tagId.toString(),
-        name: newTag.name,
+        name: newTag.tagName || newTag.name || 'Unnamed Tag',
         color: "black",
         status: 'available',
         createdAt: new Date(),
@@ -1424,8 +1438,17 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     <p className="theme-text-secondary">Loading...</p>
                   </div>
                 ) : filteredContacts.length === 0 ? (
-                  <div className="p-4 text-center theme-text-secondary">
-                    {searchTerm ? 'No users found' : 'No users available'}
+                  <div className="p-8 text-center theme-text-secondary">
+                    <p className="mb-4">{searchTerm ? 'No users found' : 'No users available'}</p>
+                    {searchTerm && /^\d+$/.test(searchTerm.replace(/\D/g, '')) && searchTerm.length >= 8 && (
+                      <button
+                        onClick={() => handleCreateNewChat(searchTerm.replace(/\D/g, ''), null)}
+                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center space-x-2 mx-auto"
+                      >
+                        <MessageSquare className="w-5 h-5" />
+                        <span>Message {searchTerm}</span>
+                      </button>
+                    )}
                   </div>
                 ) : (
                   filteredContacts.map((contact) => (
@@ -1435,7 +1458,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                     >
                       <div className="flex items-center space-x-3">
                         <div
-                          onClick={() => onNewChat()}
+                          onClick={() => handleCreateNewChat(contact.phone, null, contact.name)}
                           className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-full flex items-center justify-center shadow-md cursor-pointer"
                         >
                           <User className="w-6 h-6 text-white" />
@@ -1443,7 +1466,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                         <div className="flex-1 min-w-0 overflow-visible">
                           <div className="flex items-center justify-between">
                             <h3
-                              onClick={() => onNewChat()}
+                              onClick={() => handleCreateNewChat(contact.phone, null, contact.name)}
                               className="text-sm font-medium theme-text-primary truncate cursor-pointer"
                             >
                               {contact.name}
@@ -1460,7 +1483,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                             </button>
                           </div>
                           <p
-                            onClick={() => onNewChat()}
+                            onClick={() => handleCreateNewChat(contact.phone, null, contact.name)}
                             className="text-sm theme-text-secondary truncate cursor-pointer"
                           >
                             {contact.phone}
@@ -2092,6 +2115,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         isOpen={showNewChatModal}
         onClose={() => setShowNewChatModal(false)}
         onCreateChat={handleCreateNewChat}
+        contacts={Contacts}
       />
     </div>
   );

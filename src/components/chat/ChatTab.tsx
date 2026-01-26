@@ -54,9 +54,6 @@ const ChatTab: React.FC<ChatTabProps> = ({
               ) : (
                 <User className="w-6 h-6 text-white" />
               )}
-              {conversation.isOnline && (
-                <div className="absolute -bottom-0 -right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
-              )}
             </div>
 
             {/* Content Section */}

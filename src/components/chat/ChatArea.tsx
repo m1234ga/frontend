@@ -929,7 +929,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   const sendTemplateMessage = (template: { id: number, name: string, content: string }) => {
     setNewMessage(template.content);
     setShowTemplatePopup(false);
-    inputRef.current?.focus();
+    if (selectedConversation) {
+      inputRef.current?.focus();
+    }
   };
 
   const handleCreateTemplate = async () => {
@@ -1172,139 +1174,139 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
     };
   }, [showSecondarySidebar, showTemplatePopup, showForwardModal, replyToMessage, showReactionPicker, openMessageMenuId, onClose]);
 
-  if (!selectedConversation) {
-    return (
-      <EmptyArea conversations={conversations} currentUser={user} />
-    );
-  }
-
   return (
     <div className="flex-1 flex flex-col h-full relative bg-white dark:bg-black text-black dark:text-white transition-colors duration-300">
-      <ChatHeader
-        selectedConversation={selectedConversation}
-        isOnline={isOnline}
-        typingUsers={typingUsers}
-        chatStatus={chatStatus}
-        onAssignClick={handleAssignChat}
-        onStatusClick={handleStatusButtonClick}
-        favoriteCount={favoriteMessagesReal.length}
-        onFavoritesClick={() => {
-          setSecondarySidebarType('favorites');
-          setShowSecondarySidebar(true);
-        }}
-        onClose={onClose}
-      />
-
-      {/* Messages Area */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Show More Messages Button */}
-        {onLoadMoreMessages && messages.length >= 10 && (
-          <div className="flex justify-center py-2">
-            <button
-              onClick={async () => {
-                if (!isLoadingMoreRef.current && onLoadMoreMessages) {
-                  isLoadingMoreRef.current = true;
-                  const hasMore = await onLoadMoreMessages();
-                  isLoadingMoreRef.current = false;
-
-                  if (!hasMore) {
-                    // Show a message that there are no more messages
-                    toast.success('No more messages to load');
-                  }
-                }
-              }}
-              disabled={isLoadingMoreRef.current}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoadingMoreRef.current ? 'Loading...' : 'Show More Messages'}
-            </button>
-          </div>
-        )}
-
-        <MessageList
-          messages={messages}
-          favoriteMessages={favoriteMessagesReal}
-          toggleFavorite={toggleFavoriteReal}
-          onForward={handleForwardMessage}
-          onDelete={handleDeleteMessage}
-          onEdit={handleEditMessage}
-          onAddNote={handleAddNoteToMessage}
-          onReply={handleReplyToMessage}
-          onPin={handlePinMessage}
-          onReact={handleReactToMessage}
-          openMessageMenuId={openMessageMenuId}
-          onMenuToggle={handleMessageMenuToggle}
-        />
-
-        {/* Typing indicator */}
-        {typingUsers.size > 0 && (
-          <div className="flex justify-start animate-soft-fade-in">
-            <div className="bg-white dark:bg-slate-800/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-soft-sm">
-              <TypingIndicator className="flex items-center space-x-1 text-soft-primary text-sm font-medium" dotClassName="bg-soft-primary" text="typing" />
-            </div>
-          </div>
-        )}
-
-
-        {/* Recording area */}
-        {(recordingState === 'recording' || recordingState === 'paused' || recordingState === 'reviewing') && (
-          <RecordingControls
-            recordingState={recordingState}
-            recordingDuration={recordingDuration}
-            isPlayingPreview={isPlayingPreview}
-            onPause={pauseRecording}
-            onStop={stopRecording}
-            onResume={resumeRecording}
-            onTogglePreview={togglePreviewPlayback}
-            onRecordAgain={recordAgain}
-            onSend={sendRecording}
-            onCancel={cancelRecording}
+      {!selectedConversation ? (
+        <EmptyArea conversations={conversations} currentUser={user} />
+      ) : (
+        <>
+          <ChatHeader
+            selectedConversation={selectedConversation}
+            isOnline={isOnline}
+            typingUsers={typingUsers}
+            chatStatus={chatStatus}
+            onAssignClick={handleAssignChat}
+            onStatusClick={handleStatusButtonClick}
+            favoriteCount={favoriteMessagesReal.length}
+            onFavoritesClick={() => {
+              setSecondarySidebarType('favorites');
+              setShowSecondarySidebar(true);
+            }}
+            onClose={onClose}
           />
-        )}
 
-        {/* Recording area will be displayed here */}
+          {/* Messages Area */}
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Show More Messages Button */}
+            {onLoadMoreMessages && messages.length >= 10 && (
+              <div className="flex justify-center py-2">
+                <button
+                  onClick={async () => {
+                    if (!isLoadingMoreRef.current && onLoadMoreMessages) {
+                      isLoadingMoreRef.current = true;
+                      const hasMore = await onLoadMoreMessages();
+                      isLoadingMoreRef.current = false;
 
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Reply to message preview */}
-      {replyToMessage && (
-        <div className="mb-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border-l-4 border-blue-400">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">
-                Replying to:
+                      if (!hasMore) {
+                        // Show a message that there are no more messages
+                        toast.success('No more messages to load');
+                      }
+                    }
+                  }}
+                  disabled={isLoadingMoreRef.current}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoadingMoreRef.current ? 'Loading...' : 'Show More Messages'}
+                </button>
               </div>
-              <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                {replyToMessage.message}
+            )}
+
+            <MessageList
+              messages={messages}
+              favoriteMessages={favoriteMessagesReal}
+              toggleFavorite={toggleFavoriteReal}
+              onForward={handleForwardMessage}
+              onDelete={handleDeleteMessage}
+              onEdit={handleEditMessage}
+              onAddNote={handleAddNoteToMessage}
+              onReply={handleReplyToMessage}
+              onPin={handlePinMessage}
+              onReact={handleReactToMessage}
+              openMessageMenuId={openMessageMenuId}
+              onMenuToggle={handleMessageMenuToggle}
+            />
+
+            {/* Typing indicator */}
+            {typingUsers.size > 0 && (
+              <div className="flex justify-start animate-soft-fade-in">
+                <div className="bg-white dark:bg-slate-800/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-soft-sm">
+                  <TypingIndicator className="flex items-center space-x-1 text-soft-primary text-sm font-medium" dotClassName="bg-soft-primary" text="typing" />
+                </div>
+              </div>
+            )}
+
+
+            {/* Recording area */}
+            {(recordingState === 'recording' || recordingState === 'paused' || recordingState === 'reviewing') && (
+              <RecordingControls
+                recordingState={recordingState}
+                recordingDuration={recordingDuration}
+                isPlayingPreview={isPlayingPreview}
+                onPause={pauseRecording}
+                onStop={stopRecording}
+                onResume={resumeRecording}
+                onTogglePreview={togglePreviewPlayback}
+                onRecordAgain={recordAgain}
+                onSend={sendRecording}
+                onCancel={cancelRecording}
+              />
+            )}
+
+            {/* Recording area will be displayed here */}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Reply to message preview */}
+          {replyToMessage && (
+            <div className="mb-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border-l-4 border-blue-400">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">
+                    Replying to:
+                  </div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300 truncate">
+                    {replyToMessage.message}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setReplyToMessage(null)}
+                  className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                >
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
               </div>
             </div>
-            <button
-              onClick={() => setReplyToMessage(null)}
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
-            >
-              <X className="w-4 h-4 text-gray-500" />
-            </button>
-          </div>
-        </div>
+          )}
+
+          {/* Message Input */}
+          {/* Hidden file inputs for attachments */}
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+          <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
+
+          <MessageInput
+            newMessage={newMessage}
+            onChange={setNewMessage}
+            onSend={handleSendMessage}
+            onAttachImage={() => fileInputRef.current?.click()}
+            onAttachVideo={() => videoInputRef.current?.click()}
+            onStartRecording={() => startRecording()}
+            onStopRecording={() => stopRecording()}
+            isRecording={recordingState === 'recording' || recordingState === 'paused'}
+            onToggleTempMessages={() => setShowTemplatePopup(true)}
+          />
+        </>
       )}
-
-      {/* Message Input */}
-      {/* Hidden file inputs for attachments */}
-      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-      <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
-
-      <MessageInput
-        newMessage={newMessage}
-        onChange={setNewMessage}
-        onSend={handleSendMessage}
-        onAttachImage={() => fileInputRef.current?.click()}
-        onAttachVideo={() => videoInputRef.current?.click()}
-        onStartRecording={() => startRecording()}
-        onStopRecording={() => stopRecording()}
-        isRecording={recordingState === 'recording' || recordingState === 'paused'}
-        onToggleTempMessages={() => setShowTemplatePopup(true)}
-      />
 
 
 

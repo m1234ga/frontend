@@ -31,21 +31,20 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline,
               <User className="w-6 h-6 text-white" />
             )}
           </div>
-          {isOnline && (
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white dark:border-slate-800 rounded-full animate-bounce-subtle"></div>
-          )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center space-x-2">
-            <h2 className="font-bold text-gray-900 dark:text-white text-lg truncate tracking-tight">
-              {selectedConversation.name?.split('-_-')[0]}
-            </h2>
+          <div className="flex flex-col">
+            <div className="flex items-center space-x-2">
+              <h2 className="font-bold text-gray-900 dark:text-white text-lg truncate tracking-tight">
+                {selectedConversation.name?.split('-_-')[0]}
+              </h2>
+              {selectedConversation.unreadCount > 0 && (
+                <span className="bg-soft-primary text-white text-xs rounded-full px-2 py-0.5 font-bold shadow-soft-sm">{selectedConversation.unreadCount}</span>
+              )}
+            </div>
             <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">
-              ({selectedConversation.phone})
+              {selectedConversation.phone}
             </span>
-            {selectedConversation.unreadCount > 0 && (
-              <span className="bg-soft-primary text-white text-xs rounded-full px-2 py-0.5 font-bold shadow-soft-sm">{selectedConversation.unreadCount}</span>
-            )}
           </div>
           {selectedConversation.tags && selectedConversation.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 my-1">
@@ -55,12 +54,8 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ selectedConversation, isOnline,
             </div>
           )}
           <div className="text-sm font-medium">
-            {typingUsers.size > 0 ? (
+            {typingUsers.size > 0 && (
               <TypingIndicator className="flex items-center space-x-1 text-soft-primary" dotClassName="bg-soft-primary" text="typing" />
-            ) : isOnline ? (
-              <span className="text-emerald-500 flex items-center gap-1.5"><span className="w-2 h-2 bg-emerald-500 rounded-full"></span>Online</span>
-            ) : (
-              <span className="text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 bg-gray-300 rounded-full"></span>Offline</span>
             )}
           </div>
         </div>
