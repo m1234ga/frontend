@@ -1244,45 +1244,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             )}
           </div>
 
-          {/* Tabs */}
-          <div className="flex border-b theme-border-primary overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('open')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'open'
-                ? 'theme-text-primary border-b-2 border-cyan-500'
-                : 'theme-text-secondary hover:theme-text-primary'
-                }`}
-            >
-              Open
-            </button>
-            <button
-              onClick={() => setActiveTab('closed')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'closed'
-                ? 'theme-text-primary border-b-2 border-cyan-500'
-                : 'theme-text-secondary hover:theme-text-primary'
-                }`}
-            >
-              Closed
-            </button>
-            <button
-              onClick={() => setActiveTab('archived')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'archived'
-                ? 'theme-text-primary border-b-2 border-cyan-500'
-                : 'theme-text-secondary hover:theme-text-primary'
-                }`}
-            >
-              Archived
-            </button>
-            <button
-              onClick={() => setActiveTab('assigned')}
-              className={`flex-1 px-3 py-3 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'assigned'
-                ? 'theme-text-primary border-b-2 border-cyan-500'
-                : 'theme-text-secondary hover:theme-text-primary'
-                }`}
-            >
-              Assigned
-            </button>
-          </div>
+
 
           {/* Tag Filter */}
           {availableTags.length > 0 && (
@@ -1325,32 +1287,46 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
             </div>
           )}
 
-          {/* Tabs */}
-          <div className="flex border-b theme-border-primary">
+          {/* Main Navigation Tabs */}
+          <div className="flex border-b theme-border-primary overflow-x-auto no-scrollbar">
             <button
               onClick={() => { setActiveTab('chats'); setShowUsersList(false); }}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'chats' && !showUsersList ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
+              className={`flex-1 px-4 py-3 text-xs font-semibold transition-all whitespace-nowrap ${activeTab === 'chats' && !showUsersList ? 'theme-text-accent border-b-2 border-cyan-500 bg-gray-500/5' : 'theme-text-secondary hover:theme-text-accent hover:bg-gray-500/5'
                 }`}
             >
-              Chats
+              All Chats
             </button>
             <button
-              onClick={() => { setActiveTab('archived'); setShowUsersList(false); }}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'archived' ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
+              onClick={() => { setActiveTab('open'); setShowUsersList(false); }}
+              className={`flex-1 px-4 py-3 text-xs font-semibold transition-all whitespace-nowrap ${activeTab === 'open' && !showUsersList ? 'theme-text-accent border-b-2 border-cyan-500 bg-gray-500/5' : 'theme-text-secondary hover:theme-text-accent hover:bg-gray-500/5'
                 }`}
             >
-              Archived
+              Open
+            </button>
+            <button
+              onClick={() => { setActiveTab('closed'); setShowUsersList(false); }}
+              className={`flex-1 px-4 py-3 text-xs font-semibold transition-all whitespace-nowrap ${activeTab === 'closed' && !showUsersList ? 'theme-text-accent border-b-2 border-cyan-500 bg-gray-500/5' : 'theme-text-secondary hover:theme-text-accent hover:bg-gray-500/5'
+                }`}
+            >
+              Closed
             </button>
             <button
               onClick={() => { setActiveTab('assigned'); setShowUsersList(false); }}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'assigned' ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
+              className={`flex-1 px-4 py-3 text-xs font-semibold transition-all whitespace-nowrap ${activeTab === 'assigned' && !showUsersList ? 'theme-text-accent border-b-2 border-cyan-500 bg-gray-500/5' : 'theme-text-secondary hover:theme-text-accent hover:bg-gray-500/5'
                 }`}
             >
               Assigned
             </button>
             <button
+              onClick={() => { setActiveTab('archived'); setShowUsersList(false); }}
+              className={`flex-1 px-4 py-3 text-xs font-semibold transition-all whitespace-nowrap ${activeTab === 'archived' && !showUsersList ? 'theme-text-accent border-b-2 border-cyan-500 bg-gray-500/5' : 'theme-text-secondary hover:theme-text-accent hover:bg-gray-500/5'
+                }`}
+            >
+              Archived
+            </button>
+            <button
               onClick={() => setShowUsersList(true)}
-              className={`flex-1 py-3 text-sm font-medium transition-colors ${showUsersList ? 'theme-text-accent border-b-2 border-gray-600' : 'theme-text-secondary hover:theme-text-accent'
+              className={`flex-1 px-4 py-3 text-xs font-semibold transition-all whitespace-nowrap ${showUsersList ? 'theme-text-accent border-b-2 border-cyan-500 bg-gray-500/5' : 'theme-text-secondary hover:theme-text-accent hover:bg-gray-500/5'
                 }`}
             >
               Contacts
