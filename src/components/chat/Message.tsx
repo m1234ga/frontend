@@ -10,15 +10,17 @@ import { useMemo } from 'react';
 
 const formatTime = (dateInput?: string | number | Date) => {
   if (!dateInput) return '';
-  const date = dateInput instanceof Date ? dateInput : new Date(dateInput as string | number);
+
+  const date =
+    dateInput instanceof Date ? dateInput : new Date(dateInput);
+
   if (Number.isNaN(date.getTime())) return '';
-  const timezone = process.env.NEXT_PUBLIC_TIMEZONE || 'Africa/Cairo';
   return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
-    minute: '2-digit',
-    timeZone: timezone
+    minute: '2-digit'
   });
 };
+
 
 const MessageStatus = ({ isRead, isDelivered, isOwnMessage }: { isRead: boolean, isDelivered: boolean, isOwnMessage: boolean }) => {
   if (!isOwnMessage) return null;

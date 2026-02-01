@@ -110,6 +110,25 @@ export default function Chat(token: string) {
       throw error;
     }
   }
+  async function GetWuzUserInfo(phones: string | string[]) {
+    try {
+      const phoneArray = Array.isArray(phones) ? phones : [phones];
+      const response = await fetch(`${apiUrl}/user/info`, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ Phone: phoneArray })
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (error) {
+      console.error('Error fetching Wuz user info:', error);
+      return "Error";
+    }
+  }
   async function GetMessagesById(id: string, limit: number = 10, before?: string) {
     try {
       let url = `${apiUrl}/GetMessages/${id}?limit=${limit}`;
@@ -903,7 +922,8 @@ export default function Chat(token: string) {
     UnmuteChat,
     CreateNewChat,
     GetChatsPage,
-    RefreshChatAvatar
+    RefreshChatAvatar,
+    GetWuzUserInfo
   }
 }
 
