@@ -70,6 +70,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [userSearchTerm, setUserSearchTerm] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Close reason modal state
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -562,32 +563,13 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     }
   }, [selectedConversationId, refreshAllData]);
 
-  // Infinite scroll: attach to sidebar container
-  useEffect(() => {
-    const el = document.getElementById('chat-sidebar-list');
-    if (!el) return;
+  const handleScroll = useCallback(() => {
+    const el = listRef.current;
+    if (!el || !hasMore || isFetching.current) return;
 
-    const onScroll = () => {
-      if (!hasMore || isFetching.current) {
-        // If no more data, remove the scroll listener to prevent unnecessary checks
-        if (!hasMore) {
-          el.removeEventListener('scroll', onScroll);
-        }
-        return;
-      }
-      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
-        fetchConversations();
-      }
-    };
-
-    // Only add listener if there's more data to load
-    if (hasMore) {
-      el.addEventListener('scroll', onScroll);
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 500) {
+      fetchConversations();
     }
-
-    return () => {
-      el.removeEventListener('scroll', onScroll);
-    };
   }, [hasMore, fetchConversations]);
 
 
@@ -688,25 +670,23 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     return sorted;
   }, [conversations, archivedChats, assignedChats, openChats, closedChats, activeTab, searchTerm, filters, isClient]);
 
-  // Check if we need to load more data when content updates (classic infinite scroll fix)
+  // Check if we need to load more data if the content doesn't fill the screen
   useEffect(() => {
-    const el = document.getElementById('chat-sidebar-list');
-    if (!el || !hasMore || isFetching.current) return;
+    if (!hasMore || isFetching.current || !isClient) return;
 
     const checkAndLoad = () => {
-      // If content is shorter than container (plus buffer) or user is near bottom
-      if (hasMore && !isFetching.current) {
-        if (el.scrollHeight <= el.clientHeight + 100 ||
-          el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
-          fetchConversations();
-        }
+      const el = listRef.current;
+      if (!el) return;
+
+      // If content is shorter than container (plus buffer)
+      if (el.scrollHeight <= el.clientHeight + 100) {
+        fetchConversations();
       }
     };
 
-    // Use a small timeout to let the DOM update
-    const timeoutId = setTimeout(checkAndLoad, 500);
+    const timeoutId = setTimeout(checkAndLoad, 1000);
     return () => clearTimeout(timeoutId);
-  }, [filteredConversations, hasMore, fetchConversations, activeTab]);
+  }, [filteredConversations, hasMore, fetchConversations, activeTab, isClient]);
 
   const filteredContacts = useMemo(() => {
     if (!isClient) return []; // Prevent hydration mismatch
@@ -1357,7 +1337,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
           {/* Conversations/Users List (scrollable) with sticky footer below */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div id="chat-sidebar-list" className="flex-1 overflow-y-auto">
+            <div
+              ref={listRef}
+              id="chat-sidebar-list"
+              className="flex-1 overflow-y-auto"
+              onScroll={handleScroll}
+            >
               {!showUsersList ? (
                 // Conversations list 
                 (() => {
