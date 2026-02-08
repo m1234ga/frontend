@@ -36,7 +36,9 @@ export default function ChatPage() {
   const handleSelectConversation = async (conversation: ChatModel) => {
     if (selectedConversation?.id === conversation.id) return;
 
-    // Call user/info before fetching messages
+    const data = await GetConversation(conversation.id, 10);
+
+    // Call user/info after fetching messages
     if (conversation.phone) {
       try {
         await ChatRouter(token || "").GetWuzUserInfo([conversation.phone]);
@@ -44,8 +46,6 @@ export default function ChatPage() {
         console.error('Error fetching Wuz user info:', error);
       }
     }
-
-    const data = await GetConversation(conversation.id, 10);
 
     // Auto-assign chat to current user if not already assigned
     let updatedConversation = { ...conversation, unreadCount: 0 };

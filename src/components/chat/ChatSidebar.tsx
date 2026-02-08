@@ -590,6 +590,26 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     };
   }, [hasMore, fetchConversations]);
 
+  // Check if we need to load more data when content updates (classic infinite scroll fix)
+  useEffect(() => {
+    const el = document.getElementById('chat-sidebar-list');
+    if (!el || !hasMore || isFetching.current) return;
+
+    const checkAndLoad = () => {
+      // If content is shorter than container (plus buffer) or user is near bottom
+      if (hasMore && !isFetching.current) {
+        if (el.scrollHeight <= el.clientHeight + 100 ||
+          el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+          fetchConversations();
+        }
+      }
+    };
+
+    // Use a small timeout to let the DOM update
+    const timeoutId = setTimeout(checkAndLoad, 500);
+    return () => clearTimeout(timeoutId);
+  }, [filteredConversations, hasMore, fetchConversations, activeTab]);
+
 
   // Set client-side flag to prevent hydration mismatches
   useEffect(() => {
@@ -685,6 +705,26 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
     return sorted;
   }, [conversations, archivedChats, assignedChats, openChats, closedChats, activeTab, searchTerm, filters, isClient]);
+
+  // Check if we need to load more data when content updates (classic infinite scroll fix)
+  useEffect(() => {
+    const el = document.getElementById('chat-sidebar-list');
+    if (!el || !hasMore || isFetching.current) return;
+
+    const checkAndLoad = () => {
+      // If content is shorter than container (plus buffer) or user is near bottom
+      if (hasMore && !isFetching.current) {
+        if (el.scrollHeight <= el.clientHeight + 100 ||
+          el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+          fetchConversations();
+        }
+      }
+    };
+
+    // Use a small timeout to let the DOM update
+    const timeoutId = setTimeout(checkAndLoad, 500);
+    return () => clearTimeout(timeoutId);
+  }, [filteredConversations, hasMore, fetchConversations, activeTab]);
 
   const filteredContacts = useMemo(() => {
     if (!isClient) return []; // Prevent hydration mismatch
