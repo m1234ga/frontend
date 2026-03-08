@@ -1,22 +1,157 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { ChatSidebar } from '@/components/chat/ChatSidebar';
-import { ChatArea } from '@/components/chat/ChatArea';
-import ChatRouter from '@/components/chat/ChatRouters';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { ChatSidebarOptimized } from '@/components/chat/ChatSidebarOptimized';
+import { ChatAreaOptimized } from '@/components/chat/ChatAreaOptimized';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { Chat as ChatModel, ChatMessage } from '../../../../Shared/Models';
+import { useConversationStore } from '@/store/conversationStore';
+import { useChatApi } from '@/hooks/useChatData';
+import { Chat as ChatModel, ChatMessage, MessageReaction } from '../../../../Shared/Models';
 
+type IncomingMessage = ChatMessage & { tempId?: string };
+
+const normalizeOutgoingPhone = (chatId: string, phone?: string): string => {
+  const rawChatId = (chatId || '').trim();
+  const rawPhone = (phone || '').trim();
+  const base = (rawPhone || rawChatId).replace(/@[^@]+$/, '');
+  const isGroup = rawPhone.endsWith('@g.us') || rawChatId.endsWith('@g.us') || rawChatId.includes('-');
+
+  if (!base) return '';
+  if (isGroup) return `${base}@g.us`;
+  if (rawPhone) return rawPhone;
+  return `${base}@s.whatsapp.net`;
+};
+
+const getMessageTimeMs = (message: ChatMessage | IncomingMessage): number => {
+  const raw = message.timeStamp ?? message.timestamp;
+  if (!raw) return 0;
+  const parsed = raw instanceof Date ? raw.getTime() : new Date(raw).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const sortMessagesAsc = (items: ChatMessage[]): ChatMessage[] => {
+  return [...items].sort((a, b) => {
+    const timeDelta = getMessageTimeMs(a) - getMessageTimeMs(b);
+    if (timeDelta !== 0) return timeDelta;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
+};
+
+const normalizeMessages = (items: ChatMessage[]): ChatMessage[] => {
+  const seen = new Set<string>();
+  const unique: ChatMessage[] = [];
+
+  for (const message of items) {
+    const key = String(message.id || '').trim();
+    if (!key) {
+      unique.push(message);
+      continue;
+    }
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(message);
+  }
+
+  return unique;
+};
+
+const stripSendingSuffix = (value?: string) => value?.replace(' (Sending...)', '') || value;
+
+const mergeMessage = (base: ChatMessage, incoming: IncomingMessage, overrideId?: string): ChatMessage => ({
+  ...base,
+  ...incoming,
+  ...(overrideId ? { id: overrideId } : {}),
+  mediaPath: base.mediaPath || incoming.mediaPath,
+  message: stripSendingSuffix(incoming.message) || base.message || incoming.message
+});
+
+const resetUnreadConversation = (
+  conversation: ChatModel,
+  updateConversation: (chatId: string, updates: Partial<ChatModel>) => void
+) => {
+  updateConversation(conversation.id, { unreadCount: 0 });
+  return { ...conversation, unreadCount: 0 };
+};
+
+const assignConversationToUser = async (
+  conversation: ChatModel,
+  userId: string,
+  chatApi: ReturnType<typeof useChatApi>,
+  updateConversation: (chatId: string, updates: Partial<ChatModel>) => void
+) => {
+  await chatApi.AssignChat(conversation.id, userId, userId);
+  updateConversation(conversation.id, { assignedTo: userId, unreadCount: 0 });
+  return { ...conversation, assignedTo: userId, unreadCount: 0 };
+};
+
+const maybeFetchWuzUserProfile = async (
+  conversation: ChatModel,
+  chatApi: ReturnType<typeof useChatApi>
+) => {
+  if (!conversation.phone) return;
+  try {
+    await chatApi.RefreshChatAvatar(conversation.id, conversation.phone);
+  } catch (error) {
+    console.error('Error refreshing Wuz user profile/avatar:', error);
+  }
+};
+
+const getConversationAfterSelection = async (
+  conversation: ChatModel,
+  userId: string | undefined,
+  chatApi: ReturnType<typeof useChatApi>,
+  updateConversation: (chatId: string, updates: Partial<ChatModel>) => void
+) => {
+  const unreadReset = resetUnreadConversation(conversation, updateConversation);
+
+  if (!userId || (conversation.assignedTo && conversation.assignedTo === userId)) {
+    return unreadReset;
+  }
+
+  try {
+    return await assignConversationToUser(conversation, userId, chatApi, updateConversation);
+  } catch (error) {
+    console.error('Error auto-assigning chat:', error);
+    return unreadReset;
+  }
+};
+
+const markChatAsReadSafe = async (
+  chatId: string,
+  chatApi: ReturnType<typeof useChatApi>
+) => {
+  try {
+    await chatApi.MarkChatAsRead(chatId);
+  } catch (error) {
+    console.error('Error marking chat as read:', error);
+  }
+};
 
 export default function ChatPage() {
-  const [conversations, setConversations] = useState<ChatModel[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<ChatModel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const socket = useSocket();
-  const { token, authenticated, loading, logout, user } = useAuth();
+  const [isHistorySyncing, setIsHistorySyncing] = useState(false);
+  const [historySyncProgress, setHistorySyncProgress] = useState({ processed: 0, total: 0, percent: 0 });
+  const {
+    joinConversation,
+    leaveConversation,
+    socket,
+    onReactionUpdate,
+    onNewMessage,
+    onMessageUpdate,
+    onChatUpdate,
+    sendMessage
+  } = useSocket();
+  const { authenticated, loading, logout, user } = useAuth();
   const router = useRouter();
+  const chatApi = useChatApi();
+
+  const conversations = useConversationStore((state) => state.conversations);
+  const updateConversation = useConversationStore((state) => state.updateConversation);
+  const getConversation = useConversationStore((state) => state.getConversation);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -25,213 +160,206 @@ export default function ChatPage() {
     }
   }, [authenticated, loading, router]);
 
-  const handleConversationsUpdate = useCallback((updatedConversations: ChatModel[]) => {
-    setConversations(updatedConversations);
-  }, []);
+  // Join/leave socket room when selected conversation changes
+  const prevChatIdRef = useRef<string | null>(null);
+  const selectionRequestRef = useRef(0);
+  useEffect(() => {
+    const currentId = selectedConversation?.id ?? null;
+    if (prevChatIdRef.current && prevChatIdRef.current !== currentId) {
+      leaveConversation(prevChatIdRef.current);
+    }
+    if (currentId) {
+      joinConversation(currentId);
+      prevChatIdRef.current = currentId;
+    } else {
+      prevChatIdRef.current = null;
+    }
+    return () => {
+      if (currentId) leaveConversation(currentId);
+    };
+  }, [selectedConversation?.id, joinConversation, leaveConversation]);
 
-  async function GetConversation(id: string, limit: number = 10, before?: string) {
-    return await ChatRouter(token || "").GetMessagesById(id, limit, before);
-  }
-
-  const handleSelectConversation = async (conversation: ChatModel) => {
+  const handleSelectConversation = useCallback(async (conversation: ChatModel) => {
     if (selectedConversation?.id === conversation.id) return;
 
-    const data = await GetConversation(conversation.id, 10);
+    // Open chat immediately, then hydrate data in background.
+    const requestId = ++selectionRequestRef.current;
+    const optimisticConversation = resetUnreadConversation(conversation, updateConversation);
+    setSelectedConversation(optimisticConversation);
+    setMessages([]);
 
-    // Call user/info after fetching messages
-    if (conversation.phone) {
-      try {
-        await ChatRouter(token || "").GetWuzUserInfo([conversation.phone]);
-      } catch (error) {
-        console.error('Error fetching Wuz user info:', error);
-      }
-    }
+    const messagesPromise = chatApi.GetMessagesById(conversation.id, 10);
 
-    // Auto-assign chat to current user if not already assigned
-    let updatedConversation = { ...conversation, unreadCount: 0 };
+    void maybeFetchWuzUserProfile(conversation, chatApi);
+    void getConversationAfterSelection(conversation, user?.id, chatApi, updateConversation)
+      .then((updatedConversation) => {
+        if (selectionRequestRef.current !== requestId) return;
+        setSelectedConversation(updatedConversation);
+      });
+    void markChatAsReadSafe(conversation.id, chatApi);
 
-    if (user?.id && (!conversation.assignedTo || conversation.assignedTo !== user.id)) {
-      try {
-        await ChatRouter(token || "").AssignChat(
-          conversation.id,
-          user.id,
-          user.id // assignedBy is also the current user
-        );
-
-        // Update the conversation with the new assignment
-        updatedConversation = { ...updatedConversation, assignedTo: user.id };
-
-        // Update conversations list with new assignment
-        setConversations(prev =>
-          prev.map(conv =>
-            conv.id === conversation.id
-              ? { ...conv, assignedTo: user.id, unreadCount: 0 }
-              : conv
-          )
-        );
-
-        console.log(`Chat ${conversation.id} auto-assigned to user ${user.id}`);
-      } catch (error) {
-        console.error('Error auto-assigning chat:', error);
-        // Continue even if assignment fails
-      }
-    } else {
-      // Just update unread count if already assigned to current user
-      setConversations(prev =>
-        prev.map(conv =>
-          conv.id === conversation.id
-            ? { ...conv, unreadCount: 0 }
-            : conv
-        )
-      );
-    }
-
-    setSelectedConversation(updatedConversation);
-    // Backend returns newest first, reverse to maintain [oldest -> newest] order
-    setMessages(Array.isArray(data) ? [...data].reverse() : []);
-
-    // Mark chat as read when opened (backend call)
     try {
-      await ChatRouter(token || "").MarkChatAsRead(conversation.id);
+      const data = await messagesPromise;
+      if (selectionRequestRef.current !== requestId) return;
+      setMessages(Array.isArray(data) ? normalizeMessages(sortMessagesAsc(data)) : []);
     } catch (error) {
-      console.error('Error marking chat as read:', error);
+      if (selectionRequestRef.current !== requestId) return;
+      console.error('Error fetching messages for selected conversation:', error);
+      setMessages([]);
     }
-  };
+  }, [selectedConversation?.id, user?.id, chatApi, updateConversation]);
 
-  const handleLoadMoreMessages = async (): Promise<boolean> => {
+  const handleLoadMoreMessages = useCallback(async (): Promise<boolean> => {
     if (!selectedConversation || messages.length === 0) return false;
 
-    // Get the timestamp of the first (oldest) message
     const oldestMessage = messages[0];
-    if (!oldestMessage.timeStamp) return false;
+    const oldestRawTimestamp = oldestMessage.timeStamp ?? oldestMessage.timestamp;
+    if (!oldestRawTimestamp) return false;
 
-    const beforeTimestamp = oldestMessage.timeStamp instanceof Date
-      ? oldestMessage.timeStamp.toISOString()
-      : new Date(oldestMessage.timeStamp).toISOString();
+    const beforeTimestamp = oldestRawTimestamp instanceof Date
+      ? oldestRawTimestamp.toISOString()
+      : new Date(oldestRawTimestamp).toISOString();
 
-    const moreMessages = await GetConversation(selectedConversation.id, 10, beforeTimestamp);
+    const moreMessages = await chatApi.GetMessagesById(
+      selectedConversation.id,
+      10,
+      beforeTimestamp,
+      oldestMessage.id
+    );
 
-    // Backend returns newest first, reverse the new batch before prepending
     if (Array.isArray(moreMessages) && moreMessages.length > 0) {
-      const reversedMore = [...moreMessages].reverse();
-
+      const sortedMore = sortMessagesAsc(moreMessages);
       setMessages(prev => {
-        const existingIds = new Set(prev.map(m => m.id));
-        const uniqueMore = reversedMore.filter(m => !existingIds.has(m.id));
-        return [...uniqueMore, ...prev];
+        const existingIds = new Set(prev.map((m) => m.id));
+        const uniqueMore = sortedMore.filter((m) => !existingIds.has(m.id));
+        return normalizeMessages([...uniqueMore, ...prev]);
       });
       return true;
     }
     return false;
-  };
+  }, [selectedConversation, messages, chatApi]);
 
-  // Handle message sent confirmation
   const handleMessageSent = useCallback((data: { success: boolean; messageId: string; originalMessage: ChatMessage }) => {
-    console.log('Message sent successfully:', data);
-    setMessages(prev =>
+    setMessages(prev => normalizeMessages(
       prev.map(msg =>
         msg.id === data.originalMessage.id
-          ? { ...msg, isDelivered: true, message: msg.message.replace(' (Sending...)', '') }
+          ? { ...msg, status: 'delivered', isDelivered: true, message: msg.message.replace(' (Sending...)', '') }
           : msg
       )
-    );
+    ));
   }, []);
 
   // Handle message error
   const handleMessageError = useCallback((data: { success: boolean; error: string; originalMessage: ChatMessage }) => {
     console.error('Message failed to send:', data);
-    setMessages(prev =>
+    setMessages(prev => normalizeMessages(
       prev.map(msg =>
         msg.id === data.originalMessage.id
-          ? { ...msg, message: `${msg.message.replace(' (Sending...)', '')} (Failed to send)` }
+          ? { ...msg, status: 'failed', message: `${msg.message.replace(' (Sending...)', '')} (Failed to send)` }
           : msg
       )
-    );
+    ));
   }, []);
 
-  const handleReactionUpdate = useCallback((data: { messageId: string; reactions: any[] }) => {
-    setMessages(prev => prev.map(msg =>
+  const handleReactionUpdate = useCallback((data: { messageId: string; reactions: MessageReaction[] }) => {
+    setMessages(prev => normalizeMessages(prev.map(msg =>
       msg.id === data.messageId
         ? { ...msg, reactions: data.reactions }
         : msg
-    ));
+    )));
   }, []);
 
   // Set up Socket.IO event listeners
   useEffect(() => {
+    onReactionUpdate(handleReactionUpdate);
+  }, [onReactionUpdate, handleReactionUpdate]);
+
+  useEffect(() => {
     if (socket) {
       socket.on('message_sent', handleMessageSent as (...args: unknown[]) => void);
       socket.on('message_error', handleMessageError as (...args: unknown[]) => void);
-      socket.onReactionUpdate(handleReactionUpdate);
+      const historySyncHandler = (payload: {
+        syncing?: boolean;
+        processedConversations?: number;
+        totalConversations?: number;
+        progressPercent?: number;
+      }) => {
+        const syncing = !!payload?.syncing;
+        setIsHistorySyncing(syncing);
 
+        if (syncing) {
+          setHistorySyncProgress({
+            processed: Number(payload?.processedConversations) || 0,
+            total: Number(payload?.totalConversations) || 0,
+            percent: Number(payload?.progressPercent) || 0
+          });
+          return;
+        }
+
+        setHistorySyncProgress({ processed: 0, total: 0, percent: 0 });
+      };
+      socket.on('history_sync_status', historySyncHandler as (...args: unknown[]) => void);
       return () => {
         socket.off('message_sent', handleMessageSent as (...args: unknown[]) => void);
         socket.off('message_error', handleMessageError as (...args: unknown[]) => void);
-        // Note: SocketContext might not expose 'offReactionUpdate', but 'onReactionUpdate' uses a ref, so it's fine.
-        // Actually best to ensure cleanup if possible, but context design seems to use refs for stable callbacks.
+        socket.off('history_sync_status', historySyncHandler as (...args: unknown[]) => void);
       };
     }
-  }, [socket, handleMessageSent, handleMessageError, handleReactionUpdate]);
+  }, [socket, handleMessageSent, handleMessageError]);
 
-  const handleSendMessage = async (content: string, replyMessage?: ChatMessage) => {
-    if (selectedConversation) {
-      const newMessage: ChatMessage = {
-        id: Date.now().toString(),
-        chatId: selectedConversation.id,
-        message: content,
-        timeStamp: new Date(),
-        ContactId: selectedConversation.contactId,
-        messageType: 'text',
-        isEdit: false,
-        isRead: false,
-        isDelivered: false,
-        isFromMe: true,
-        phone: selectedConversation.phone,
-        pushName: selectedConversation.name,
-        replyToMessage: replyMessage,
-        replyToMessageId: replyMessage?.id
-      };
+  const handleSendMessage = useCallback(async (content: string, replyMessage?: ChatMessage) => {
+    if (!selectedConversation) return;
+    const targetPhone = normalizeOutgoingPhone(selectedConversation.id, selectedConversation.phone);
 
-      // Add message to UI immediately for better UX with sending status
-      const messageWithStatus = { ...newMessage, message: `${newMessage.message} (Sending...)` };
-      setMessages(prev => [...prev, messageWithStatus]);
+    const newMessage: ChatMessage = {
+      id: Date.now().toString(),
+      chatId: selectedConversation.id,
+      message: content,
+      timeStamp: new Date(),
+      ContactId: selectedConversation.contactId,
+      messageType: 'text',
+      isEdit: false,
+      isRead: false,
+      isDelivered: false,
+      status: 'sent',
+      isFromMe: true,
+      phone: targetPhone,
+      pushName: selectedConversation.name,
+      replyToMessage: replyMessage,
+      replyToMessageId: replyMessage?.id
+    };
 
-      // Update conversation list with new last message
-      setConversations(prev =>
-        prev.map(conv =>
-          conv.id === selectedConversation.id
-            ? { ...conv, lastMessage: content, lastMessageTime: new Date() }
-            : conv
+    const messageWithStatus = { ...newMessage, message: `${newMessage.message} (Sending...)` };
+    setMessages(prev => normalizeMessages([...prev, messageWithStatus]));
+    updateConversation(selectedConversation.id, { lastMessage: content, lastMessageTime: new Date() });
+
+    try {
+      sendMessage(newMessage);
+    } catch {
+      setMessages(prev => normalizeMessages(
+        prev.map(msg =>
+          msg.id === newMessage.id
+            ? { ...msg, message: `${msg.message.replace(' (Sending...)', '')} (Failed to send)` }
+            : msg
         )
-      );
-
-      try {
-        // Send message via Socket.io event
-        socket.sendMessage(newMessage);
-        console.log('Message sent via Socket.io');
-      } catch (error) {
-        console.log('Error sending message:', error);
-
-        // Update message status to show error
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === newMessage.id
-              ? { ...msg, message: `${msg.message.replace(' (Sending...)', '')} (Failed to send)` }
-              : msg
-          )
-        );
-      }
+      ));
     }
-  };
+  }, [selectedConversation, sendMessage, updateConversation]);
 
-  const handleNewMessage = useCallback((message: ChatMessage & { tempId?: string }) => {
+  const handleNewMessage = useCallback((message: IncomingMessage) => {
     if (!selectedConversation || message.chatId !== selectedConversation.id) {
+      const existingConversation = getConversation(message.chatId);
+      const currentUnread = existingConversation?.unreadCount || 0;
+      updateConversation(message.chatId, {
+        lastMessage: stripSendingSuffix(message.message) || message.message,
+        lastMessageTime: message.timeStamp || message.timestamp || new Date(),
+        unreadCount: currentUnread + 1
+      });
       return;
     }
 
-    // Automatically mark as read if we're currently in the chat
     if (!message.isFromMe) {
-      ChatRouter(token || "").MarkChatAsRead(selectedConversation.id).catch(console.error);
+      chatApi.MarkChatAsRead(selectedConversation.id).catch(console.error);
     }
 
     setMessages(prev => {
@@ -243,101 +371,61 @@ export default function ChatPage() {
 
       if (existingIndex >= 0) {
         const updated = [...prev];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          ...message,
-          id: message.id, // Ensure ID is updated to the real one
-          mediaPath: updated[existingIndex].mediaPath || message.mediaPath,
-          message: message.message?.replace(' (Sending...)', '') || message.message
-        };
-        return updated;
+        updated[existingIndex] = mergeMessage(updated[existingIndex], message, message.id);
+        return normalizeMessages(updated);
       }
-      return [...prev, { ...message, message: message.message?.replace(' (Sending...)', '') || message.message }];
+      return normalizeMessages([...prev, { ...message, message: stripSendingSuffix(message.message) || message.message }]);
     });
-  }, [selectedConversation]);
+  }, [selectedConversation, chatApi, getConversation, updateConversation]);
 
-  const handleMessageUpdate = useCallback((updatedMessage: ChatMessage & { tempId?: string }) => {
+  const handleMessageUpdate = useCallback((updatedMessage: IncomingMessage) => {
     if (!selectedConversation || updatedMessage.chatId !== selectedConversation.id) {
       return;
     }
+
     setMessages(prev => {
-      // 1. Check for exact match by current message ID
-      const exactIndex = prev.findIndex(msg => msg.id === updatedMessage.id);
-      if (exactIndex !== -1) {
-        const updated = [...prev];
-        updated[exactIndex] = {
-          ...updated[exactIndex],
-          ...updatedMessage,
-          mediaPath: updated[exactIndex].mediaPath || updatedMessage.mediaPath,
-          message: updatedMessage.message?.replace(' (Sending...)', '') || updated[exactIndex].message || updatedMessage.message
-        };
-        return updated;
-      }
+      const index = prev.findIndex((msg) => msg.id === updatedMessage.id);
+      if (index === -1) return prev;
 
-      // 2. Check for match by tempId (if provided)
-      const tempIndex = updatedMessage.tempId
-        ? prev.findIndex(msg => msg.id === updatedMessage.tempId)
-        : -1;
-      if (tempIndex !== -1) {
-        const updated = [...prev];
-        updated[tempIndex] = {
-          ...updated[tempIndex],
-          ...updatedMessage,
-          id: updatedMessage.id || updated[tempIndex].id, // Replace temp ID with real ID
-          mediaPath: updated[tempIndex].mediaPath || updatedMessage.mediaPath,
-          message: updatedMessage.message?.replace(' (Sending...)', '') || updated[tempIndex].message || updatedMessage.message
-        };
-        return updated;
-      }
-
-      // 3. Last fallback: Find an optimistic message of same type that is still in "Sending..." state
-      const optimisticIndex = prev.findIndex(msg =>
-        msg.isFromMe &&
-        msg.messageType === updatedMessage.messageType &&
-        msg.message?.includes('(Sending...)')
-      );
-
-      if (optimisticIndex !== -1) {
-        const updated = [...prev];
-        updated[optimisticIndex] = {
-          ...updated[optimisticIndex],
-          ...updatedMessage,
-          mediaPath: updated[optimisticIndex].mediaPath || updatedMessage.mediaPath,
-          message: updatedMessage.message?.replace(' (Sending...)', '') || updated[optimisticIndex].message || updatedMessage.message
-        };
-        return updated;
-      }
-
-      // 4. If not found and it's a sending confirmation (has ID and isFromMe), treat as new if it's very recent.
-      // However, for ReadReceipt updates (where message already has an ID but wasn't found in current UI list),
-      // we DON'T want to append it to the bottom as it's likely an older message not currently loaded.
-      if (!updatedMessage.isFromMe || updatedMessage.message?.includes('(Sending...)')) {
-        // Don't add status updates for messages we don't have in view
-        return prev;
-      }
-
-      const updatedTimestamp = updatedMessage.timeStamp
-        ? new Date(updatedMessage.timeStamp)
-        : (updatedMessage.timestamp ? new Date(updatedMessage.timestamp) : new Date());
-
-      // Only append if it looks like a legitimate new message being confirmed
-      return [...prev, {
-        ...updatedMessage,
-        timestamp: updatedTimestamp.toISOString(),
-        timeStamp: updatedTimestamp,
-        message: updatedMessage.message?.replace(' (Sending...)', '') || updatedMessage.message
-      }];
+      const next = [...prev];
+      next[index] = mergeMessage(next[index], updatedMessage);
+      return normalizeMessages(next);
     });
   }, [selectedConversation]);
+
+  const handleChatUpdate = useCallback((chat: ChatModel & { unread_count?: number }) => {
+    const unreadCount = chat.unread_count ?? chat.unreadCount;
+    updateConversation(chat.id, {
+      ...chat,
+      ...(unreadCount !== undefined ? { unreadCount } : {})
+    });
+  }, [updateConversation]);
+
+  useEffect(() => {
+    onNewMessage(handleNewMessage);
+  }, [onNewMessage, handleNewMessage]);
+
+  useEffect(() => {
+    onMessageUpdate(handleMessageUpdate);
+  }, [onMessageUpdate, handleMessageUpdate]);
+
+  useEffect(() => {
+    onChatUpdate(handleChatUpdate);
+  }, [onChatUpdate, handleChatUpdate]);
 
   const handleNewChat = () => {
     console.log('New chat functionality');
   };
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout();
     router.push('/auth');
-  };
+  }, [logout, router]);
+
+  const handleClose = useCallback(() => {
+    setSelectedConversation(null);
+    setMessages([]);
+  }, []);
 
   if (loading) {
     return (
@@ -355,19 +443,19 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-screen flex tech-bg">
-      {/* Chat Sidebar */}
-      <ChatSidebar
-        conversations={conversations}
+    <div className="h-screen flex tech-bg relative">
+      {isHistorySyncing && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 rounded-full border border-[var(--chat-border)] bg-[var(--chat-panel)] px-4 py-1.5 text-xs text-[var(--chat-muted)] shadow-md">
+          Sync history in progress... {historySyncProgress.percent}% ({historySyncProgress.processed}/{historySyncProgress.total || '?'})
+        </div>
+      )}
+      <ChatSidebarOptimized
         onSelectConversation={handleSelectConversation}
         onNewChat={handleNewChat}
-        selectedConversationId={selectedConversation?.id || ""}
-        onConversationsUpdate={handleConversationsUpdate}
+        selectedConversationId={selectedConversation?.id ?? ''}
         onLogout={handleLogout}
       />
-
-      {/* Chat Area */}
-      <ChatArea
+      <ChatAreaOptimized
         selectedConversation={selectedConversation}
         messages={messages}
         onSendMessage={handleSendMessage}
@@ -375,10 +463,7 @@ export default function ChatPage() {
         onMessageUpdate={handleMessageUpdate}
         conversations={conversations}
         onLoadMoreMessages={handleLoadMoreMessages}
-        onClose={() => {
-          setSelectedConversation(null);
-          setMessages([]);
-        }}
+        onClose={handleClose}
       />
     </div>
   );

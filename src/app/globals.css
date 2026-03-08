@@ -2,62 +2,111 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Major cleanup notes:
+  1) Consolidated repeated colors into semantic tokens used by all shared UI classes.
+  2) Removed unused legacy classes/rules (soft-*, tech-chat-bg, animate-soft-fade-in, .glass alias).
+  3) Replaced duplicated dark-mode selectors with token overrides in `.dark`.
+  4) Standardized spacing/indentation and grouped rules by purpose for easier maintenance.
+*/
+
 :root {
+  /* App foundation */
   --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
   --text-primary: #1e293b;
   --text-secondary: #64748b;
   --border-color: #e2e8f0;
+  --app-bg-gradient: radial-gradient(circle at 0% 0%, #ecf2ff 0%, #f7f9fd 38%, #f2f5fb 100%);
+  --selection-bg: #34d399;
 
-  /* Soft Theme Variables */
-  --soft-primary: #10b981;
-  --soft-primary-light: #34d399;
-  --soft-secondary: #8b5cf6;
-  --soft-danger: #f43f5e;
+  /* Legacy chat shell tokens (still used by sidebar/header/input components) */
+  --legacy-header-bg: #ffffff;
+  --legacy-sidebar-bg: #f8fafc;
+  --legacy-input-bg: #f1f5f9;
+  --legacy-input-border: #e2e8f0;
 
-  /* Glass Variables */
+  /* Glass panel tokens */
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-shimmer: rgba(255, 255, 255, 0.8);
+  --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  --glass-shadow-hover: 0 10px 40px rgba(0, 0, 0, 0.15);
+
+  /* Enterprise chat palette */
+  --chat-bg: #f3f6fb;
+  --chat-panel: #ffffff;
+  --chat-border: #d8e0ec;
+  --chat-text: #0f172a;
+  --chat-muted: #607089;
+  --chat-accent: #0b6fff;
+  --chat-accent-soft: #e8f1ff;
+  --chat-avatar-bg: #e6edf8;
 }
 
 .dark {
+  /* App foundation */
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --border-color: #334155;
+  --app-bg-gradient: radial-gradient(circle at 0% 0%, #0f1b30 0%, #0b1220 40%, #090f1b 100%);
+
+  /* Legacy chat shell tokens */
+  --legacy-header-bg: #000000;
+  --legacy-sidebar-bg: #0f172a;
+  --legacy-input-bg: #1e293b;
+  --legacy-input-border: #334155;
 
   --glass-bg: rgba(15, 23, 42, 0.7);
   --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-shimmer: rgba(255, 255, 255, 0.05);
+  --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.35);
+  --glass-shadow-hover: 0 10px 40px rgba(0, 0, 0, 0.45);
+
+  --chat-bg: #0d1524;
+  --chat-panel: #121d2f;
+  --chat-border: #24314a;
+  --chat-text: #dce6f8;
+  --chat-muted: #8fa2c0;
+  --chat-accent: #4f8dff;
+  --chat-accent-soft: #1a2a4f;
+  --chat-avatar-bg: #1b2940;
 }
 
 body {
-  background-color: var(--bg-primary);
+  background: var(--app-bg-gradient);
   color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: var(--font-ui), 'Segoe UI', sans-serif;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
-/* Glassmorphism Utilities */
-.glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono), Consolas, monospace;
 }
 
+/* Reusable panel style used by left navigation */
 .glass-panel {
-  @apply glass rounded-3xl transition-all duration-300;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px) saturate(115%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 1.5rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .glass-panel:hover {
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--glass-shadow-hover);
   transform: translateY(-2px);
 }
 
-/* Scrollbar */
+/* Scrollbars */
+* {
+  scrollbar-color: var(--text-secondary) transparent;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -76,106 +125,56 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--soft-primary);
+  background-color: color-mix(in srgb, var(--text-secondary) 70%, #10b981);
 }
 
-/* Soft Animations */
-@keyframes soft-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-soft-fade-in {
-  animation: soft-fade-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-}
-
-/* Common Components Overrides */
-.soft-button {
-  @apply px-4 py-2 rounded-xl font-medium transition-all duration-200 active:scale-95;
-}
-
-.soft-input {
-  @apply w-full px-4 py-3 rounded-2xl bg-white dark:bg-slate-800 border-2 border-transparent focus:border-soft-primary outline-none transition-all duration-200;
-  box-shadow: var(--shadow-soft-inner);
-}
-
-/* Text Selection */
+/* Text selection */
 ::selection {
-  background: var(--soft-primary-light);
-  color: white;
+  background: var(--selection-bg);
+  color: #ffffff;
 }
 
-/* Chat specific styles */
+/* Legacy chat shell classes (kept because they are still consumed by TSX components) */
 .tech-header {
-  background-color: white;
-  border-top: 1px solid #e2e8f0;
-}
-
-.dark .tech-header {
-  background-color: black;
-  border-color: #334155;
+  background-color: var(--legacy-header-bg);
+  border-top: 1px solid var(--border-color);
 }
 
 .chat-input {
-  background-color: #f1f5f9;
-  color: #1e293b;
-  border: 1px solid #e2e8f0;
-}
-
-.dark .chat-input {
-  background-color: #1e293b;
-  color: #f8fafc;
-  border-color: #334155;
-}
-
-.tech-chat-bg {
-  background-color: white;
-}
-
-.dark .tech-chat-bg {
-  background-color: black;
+  background-color: var(--legacy-input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--legacy-input-border);
 }
 
 .tech-sidebar {
-  background-color: #f8fafc;
-  border-right: 1px solid #e2e8f0;
-  color: #1e293b;
-}
-
-
-.dark .tech-sidebar {
-  background-color: #0f172a;
-  border-color: #334155;
-  color: #f8fafc;
+  background-color: var(--legacy-sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 /* Typing Dots Animation */
 @keyframes typing-bounce {
-  0%, 60%, 100% { 
+  0%,
+  60%,
+  100% {
     transform: translateY(0);
     opacity: 0.7;
   }
-  30% { 
+
+  30% {
     transform: translateY(-8px);
     opacity: 1;
   }
 }
 
 .typing-dot {
-  display: inline-block;
+  display: inline-flex;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background-color: currentColor;
   animation: typing-bounce 1.4s infinite ease-in-out;
-  margin: 0 1px;
+  margin-inline: 1px;
 }
 
 .typing-dot:nth-child(1) {
@@ -188,4 +187,84 @@ body {
 
 .typing-dot:nth-child(3) {
   animation-delay: 0.4s;
+}
+
+.enterprise-chat-header {
+  background: color-mix(in srgb, var(--chat-panel) 88%, transparent);
+  backdrop-filter: blur(10px) saturate(110%);
+  border-bottom: 1px solid var(--chat-border);
+}
+
+.enterprise-header-btn {
+  @apply inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors;
+  color: var(--chat-muted);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.enterprise-header-btn:hover {
+  color: var(--chat-text);
+  background: var(--chat-accent-soft);
+  border-color: var(--chat-border);
+}
+
+.enterprise-chat-thread {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--chat-bg) 96%, white) 0%, var(--chat-bg) 100%);
+}
+
+/* Thread row layout — side padding only; vertical rhythm set by CSS padding-block.
+   IMPORTANT: padding-top + padding-bottom for each variant MUST equal the
+   rowVerticalPadding constant used in VirtualizedMessageList so react-window
+   allocates the correct height. */
+.enterprise-thread-row {
+  padding-inline: 0.875rem;
+}
+
+/* Same-sender continuation (within 4 min) → rowVerticalPadding = 2 */
+.enterprise-thread-row--grouped {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+/* First message per sender / after a pause → rowVerticalPadding = 8 */
+.enterprise-thread-row--regular {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* Row that opens a new calendar day → rowVerticalPadding = 16 */
+.enterprise-thread-row--separator {
+  padding-top: 12px;
+  padding-bottom: 4px;
+}
+
+/* First row of the conversation → rowVerticalPadding = 10 */
+.enterprise-thread-row--first-separator {
+  padding-top: 6px;
+  padding-bottom: 4px;
+}
+
+/* Date pill wrapper — lives inside rowContentRef so it IS measured by ResizeObserver */
+.enterprise-date-separator-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.enterprise-date-separator-pill {
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--chat-muted);
+  border: 1px solid color-mix(in srgb, var(--chat-border) 70%, transparent);
+  background: color-mix(in srgb, var(--chat-panel) 90%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.enterprise-composer {
+  background: color-mix(in srgb, var(--chat-panel) 94%, transparent);
+  border-top: 1px solid var(--chat-border);
+  backdrop-filter: blur(8px);
 }

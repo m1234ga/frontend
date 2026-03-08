@@ -19,13 +19,12 @@ import {
   Radar
 } from 'recharts';
 import {
-  MessageSquare,
   TrendingUp,
   AlertTriangle,
   CheckCircle,
-  Users,
-  Target
+  Users
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface BehaviorMetrics {
   agentId: string;
@@ -38,6 +37,11 @@ interface BehaviorMetrics {
   problemSolvingScore: number;
   complianceScore: number;
   upsellScore: number;
+  productivityScore?: number;
+  totalAssignedChats?: number;
+  resolvedChats?: number;
+  openChats?: number;
+  isActive?: boolean;
   fieldType: 'medical' | 'restaurant' | 'general';
 }
 
@@ -62,115 +66,142 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
   fieldType,
   timeRange
 }) => {
+  const { token } = useAuth();
   const [behaviorData, setBehaviorData] = useState<BehaviorMetrics[]>([]);
   const [tatData, setTatData] = useState<TATData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const getApiBaseUrl = () => (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
+
+  const getAverage = (values: number[]) => {
+    if (values.length === 0) return 0;
+    return Math.round(values.reduce((acc, value) => acc + value, 0) / values.length);
+  };
+
+  const to100ScoreFromSeconds = (seconds: number, ideal: number, max: number) => {
+    if (seconds <= ideal) return 100;
+    if (seconds >= max) return 0;
+    return Math.max(0, Math.round(((max - seconds) / (max - ideal)) * 100));
+  };
+
   const fetchBehaviorData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const endpoint = agentId
-        ? `/api/agent-report/${agentId}?timeRange=${timeRange}&field=${fieldType}`
-        : `/api/dashboard?timeRange=${timeRange}&field=${fieldType}`;
+      const endpoint = `${getApiBaseUrl()}/api/dashboard?timeRange=${timeRange}&field=${fieldType}`;
 
-      const response = await fetch(endpoint);
+      const response = await fetch(endpoint, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
       if (response.ok) {
         const data = await response.json();
-        setBehaviorData(data.agentMetrics || []);
+        const source: BehaviorMetrics[] = Array.isArray(data.agentMetrics) ? data.agentMetrics : [];
+        const filtered = agentId ? source.filter((item) => item.agentId === agentId) : source;
+        setBehaviorData(filtered);
         setTatData(data.tatData || []);
+      } else {
+        setBehaviorData([]);
+        setTatData([]);
       }
     } catch (error) {
       console.error('Error fetching behavior data:', error);
+      setBehaviorData([]);
+      setTatData([]);
     } finally {
       setIsLoading(false);
     }
-  }, [agentId, timeRange, fieldType]);
+  }, [agentId, timeRange, fieldType, token]);
 
   useEffect(() => {
     fetchBehaviorData();
   }, [fetchBehaviorData]);
 
   const getFieldSpecificMetrics = () => {
+    const responseScore = to100ScoreFromSeconds(getAverage(behaviorData.map((a) => a.responseTime || 0)), 30, 600);
+    const resolutionScore = to100ScoreFromSeconds(getAverage(behaviorData.map((a) => a.resolutionTime || 0)), 300, 7200);
+    const satisfaction = getAverage(behaviorData.map((a) => a.customerSatisfaction || 0));
+    const empathy = getAverage(behaviorData.map((a) => a.empathyScore || 0));
+    const professional = getAverage(behaviorData.map((a) => a.professionalismScore || 0));
+    const solving = getAverage(behaviorData.map((a) => a.problemSolvingScore || 0));
+    const compliance = getAverage(behaviorData.map((a) => a.complianceScore || 0));
+    const upsell = getAverage(behaviorData.map((a) => a.upsellScore || 0));
+
     if (fieldType === 'medical') {
       return [
-        { name: 'Response Time', value: 85, fullMark: 100 },
-        { name: 'Empathy', value: 92, fullMark: 100 },
-        { name: 'Medical Knowledge', value: 88, fullMark: 100 },
-        { name: 'HIPAA Compliance', value: 98, fullMark: 100 },
-        { name: 'Critical Response', value: 90, fullMark: 100 },
-        { name: 'Documentation', value: 87, fullMark: 100 }
-      ];
-    } else if (fieldType === 'restaurant') {
-      return [
-        { name: 'Response Time', value: 88, fullMark: 100 },
-        { name: 'Friendliness', value: 94, fullMark: 100 },
-        { name: 'Menu Knowledge', value: 91, fullMark: 100 },
-        { name: 'Order Accuracy', value: 96, fullMark: 100 },
-        { name: 'Upselling', value: 78, fullMark: 100 },
-        { name: 'Problem Solving', value: 89, fullMark: 100 }
+        { name: 'Response Speed', value: responseScore, fullMark: 100 },
+        { name: 'Resolution Speed', value: resolutionScore, fullMark: 100 },
+        { name: 'Satisfaction', value: satisfaction, fullMark: 100 },
+        { name: 'Empathy', value: empathy, fullMark: 100 },
+        { name: 'Compliance', value: compliance, fullMark: 100 },
+        { name: 'Problem Solving', value: solving, fullMark: 100 }
       ];
     }
+
+    if (fieldType === 'restaurant') {
+      return [
+        { name: 'Response Speed', value: responseScore, fullMark: 100 },
+        { name: 'Resolution Speed', value: resolutionScore, fullMark: 100 },
+        { name: 'Satisfaction', value: satisfaction, fullMark: 100 },
+        { name: 'Service Quality', value: professional, fullMark: 100 },
+        { name: 'Upsell', value: upsell, fullMark: 100 },
+        { name: 'Problem Solving', value: solving, fullMark: 100 }
+      ];
+    }
+
     return [
-      { name: 'Response Time', value: 86, fullMark: 100 },
-      { name: 'Customer Service', value: 90, fullMark: 100 },
-      { name: 'Problem Solving', value: 88, fullMark: 100 },
-      { name: 'Communication', value: 92, fullMark: 100 },
-      { name: 'Efficiency', value: 85, fullMark: 100 },
-      { name: 'Satisfaction', value: 89, fullMark: 100 }
+      { name: 'Response Speed', value: responseScore, fullMark: 100 },
+      { name: 'Resolution Speed', value: resolutionScore, fullMark: 100 },
+      { name: 'Satisfaction', value: satisfaction, fullMark: 100 },
+      { name: 'Empathy', value: empathy, fullMark: 100 },
+      { name: 'Professionalism', value: professional, fullMark: 100 },
+      { name: 'Problem Solving', value: solving, fullMark: 100 }
     ];
   };
 
   const getPerformanceInsights = () => {
-    if (fieldType === 'medical') {
-      return [
-        {
-          title: 'Critical Response Excellence',
-          description: 'Agent maintains excellent response times for critical medical cases',
-          icon: AlertTriangle,
-          color: 'text-red-600',
-          bgColor: 'bg-red-100'
-        },
-        {
-          title: 'HIPAA Compliance',
-          description: 'Perfect compliance with patient privacy regulations',
-          icon: CheckCircle,
-          color: 'text-green-600',
-          bgColor: 'bg-green-100'
-        },
-        {
-          title: 'Empathy Score',
-          description: 'High empathy levels in patient interactions',
-          icon: Users,
-          color: 'text-blue-600',
-          bgColor: 'bg-blue-100'
-        }
-      ];
-    } else if (fieldType === 'restaurant') {
-      return [
-        {
-          title: 'Order Accuracy',
-          description: 'Excellent accuracy in order taking and processing',
-          icon: Target,
-          color: 'text-green-600',
-          bgColor: 'bg-green-100'
-        },
-        {
-          title: 'Customer Service',
-          description: 'Outstanding customer service and friendliness',
-          icon: MessageSquare,
-          color: 'text-blue-600',
-          bgColor: 'bg-blue-100'
-        },
-        {
-          title: 'Upselling Opportunity',
-          description: 'Room for improvement in upselling techniques',
-          icon: TrendingUp,
-          color: 'text-yellow-600',
-          bgColor: 'bg-yellow-100'
-        }
-      ];
+    const activeAgents = behaviorData.filter((a) => a.isActive).length;
+    const totalAgents = behaviorData.length;
+    const avgResponseSec = getAverage(behaviorData.map((a) => a.responseTime || 0));
+    const avgSatisfaction = getAverage(behaviorData.map((a) => a.customerSatisfaction || 0));
+
+    const insights = [
+      {
+        title: 'Logged-In Agents',
+        description: `${activeAgents} of ${totalAgents} agents are currently active`,
+        icon: Users,
+        color: 'text-blue-600',
+        bgColor: 'bg-blue-100'
+      },
+      {
+        title: 'Average Response Time',
+        description: `Current first response average is ${avgResponseSec}s`,
+        icon: AlertTriangle,
+        color: avgResponseSec <= 60 ? 'text-green-600' : 'text-yellow-600',
+        bgColor: avgResponseSec <= 60 ? 'bg-green-100' : 'bg-yellow-100'
+      },
+      {
+        title: 'Satisfaction Trend',
+        description: `Team-wide satisfaction average is ${avgSatisfaction}%`,
+        icon: avgSatisfaction >= 80 ? CheckCircle : TrendingUp,
+        color: avgSatisfaction >= 80 ? 'text-green-600' : 'text-amber-600',
+        bgColor: avgSatisfaction >= 80 ? 'bg-green-100' : 'bg-amber-100'
+      }
+    ];
+
+    if (fieldType === 'restaurant') {
+      const avgUpsell = getAverage(behaviorData.map((a) => a.upsellScore || 0));
+      insights[2] = {
+        title: 'Upsell Performance',
+        description: `Average upsell score is ${avgUpsell}%`,
+        icon: TrendingUp,
+        color: avgUpsell >= 70 ? 'text-green-600' : 'text-amber-600',
+        bgColor: avgUpsell >= 70 ? 'bg-green-100' : 'bg-amber-100'
+      };
     }
-    return [];
+
+    return insights;
   };
 
   if (isLoading) {
@@ -227,27 +258,33 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Turn Around Time (TAT) Analysis
         </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={tatData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="avgFirstResponseTime"
-              stroke="#8884d8"
-              name="First Response Time (s)"
-            />
-            <Line
-              type="monotone"
-              dataKey="avgResolutionTime"
-              stroke="#82ca9d"
-              name="Resolution Time (s)"
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        {tatData.length === 0 ? (
+          <div className="h-[300px] flex items-center justify-center text-gray-500 dark:text-gray-400">
+            No TAT data available yet
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={tatData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="avgFirstResponseTime"
+                stroke="#8884d8"
+                name="First Response Time (s)"
+              />
+              <Line
+                type="monotone"
+                dataKey="avgResolutionTime"
+                stroke="#82ca9d"
+                name="Resolution Time (s)"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* Agent Performance Radar */}
@@ -276,17 +313,23 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           Agent Performance Comparison
         </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={behaviorData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="agentName" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="customerSatisfaction" fill="#8884d8" name="Satisfaction %" />
-            <Bar dataKey="productivityScore" fill="#82ca9d" name="Productivity Score" />
-          </BarChart>
-        </ResponsiveContainer>
+        {behaviorData.length === 0 ? (
+          <div className="h-[300px] flex items-center justify-center text-gray-500 dark:text-gray-400">
+            No agent metrics available
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={behaviorData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="agentName" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="customerSatisfaction" fill="#8884d8" name="Satisfaction %" />
+              <Bar dataKey="productivityScore" fill="#82ca9d" name="Assigned Chats" />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
       {/* Detailed Metrics Table */}
@@ -341,7 +384,18 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
               {behaviorData.map((agent) => (
                 <tr key={agent.agentId} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                    {agent.agentName}
+                    <div className="flex items-center gap-2">
+                      <span>{agent.agentName}</span>
+                      {agent.isActive ? (
+                        <span className="inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2 py-0.5 text-[10px] font-bold rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                          Offline
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                     {agent.responseTime}s
@@ -382,6 +436,13 @@ export const AgentBehaviorReport: React.FC<AgentBehaviorReportProps> = ({
                   </td>
                 </tr>
               ))}
+              {behaviorData.length === 0 && (
+                <tr>
+                  <td colSpan={fieldType === 'medical' || fieldType === 'restaurant' ? 7 : 5} className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    No agent performance records found.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

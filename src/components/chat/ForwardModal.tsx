@@ -33,9 +33,12 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
   }, [isOpen]);
 
   // Filter conversations based on search term
+  const normalizedSearch = searchTerm.toLowerCase();
+  const contains = (value: unknown) => String(value ?? '').toLowerCase().includes(normalizedSearch);
+
   const filteredConversations = conversations.filter(conversation =>
-    conversation.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conversation.phone?.toLowerCase().includes(searchTerm.toLowerCase())
+    contains(conversation.name) ||
+    contains(conversation.phone)
   );
 
   const handleForward = async () => {

@@ -23,9 +23,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
   const filteredContacts = useMemo(() => {
     if (!searchTerm.trim()) return contacts.slice(0, 50);
     const lower = searchTerm.toLowerCase();
+    const includesLower = (value: unknown) => String(value ?? '').toLowerCase().includes(lower);
     return contacts.filter(c =>
-      (c.name || '').toLowerCase().includes(lower) ||
-      (c.phone || '').includes(searchTerm)
+      includesLower(c.name) ||
+      includesLower(c.phone)
     );
   }, [contacts, searchTerm]);
 

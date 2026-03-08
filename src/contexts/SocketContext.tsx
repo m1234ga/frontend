@@ -2,7 +2,19 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-import { Chat, ChatMessage } from '@shared/Models';
+import { Chat, ChatMessage, MessageReaction } from '@shared/Models';
+
+const normalizeOutgoingPhone = (chatId: string, phone?: string): string => {
+  const rawChatId = (chatId || '').trim();
+  const rawPhone = (phone || '').trim();
+  const base = (rawPhone || rawChatId).replace(/@[^@]+$/, '');
+  const isGroup = rawPhone.endsWith('@g.us') || rawChatId.endsWith('@g.us') || rawChatId.includes('-');
+
+  if (!base) return '';
+  if (isGroup) return `${base}@g.us`;
+  if (rawPhone) return rawPhone;
+  return `${base}@s.whatsapp.net`;
+};
 
 interface SocketContextType {
   socket: Socket | null;
@@ -15,7 +27,7 @@ interface SocketContextType {
   onChatUpdate: (callback: (chat: Chat) => void) => void;
   onUserTyping: (callback: (data: { userId: string; isTyping: boolean; conversationId: string }) => void) => void;
   onChatPresence: (callback: (data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) => void;
-  onReactionUpdate: (callback: (data: { messageId: string; reactions: any[] }) => void) => void;
+  onReactionUpdate: (callback: (data: { messageId: string; reactions: MessageReaction[] }) => void) => void;
   emitTyping: (conversationId: string, isTyping: boolean) => void;
   on: (event: string, callback: (...args: unknown[]) => void) => void;
   off: (event: string, callback: (...args: unknown[]) => void) => void;
@@ -46,7 +58,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const chatUpdateCallbackRef = useRef<((chat: Chat) => void) | null>(null);
   const userTypingCallbackRef = useRef<((data: { userId: string; isTyping: boolean; conversationId: string }) => void) | null>(null);
   const chatPresenceCallbackRef = useRef<((data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) | null>(null);
-  const reactionUpdateCallbackRef = useRef<((data: { messageId: string; reactions: any[] }) => void) | null>(null);
+  const reactionUpdateCallbackRef = useRef<((data: { messageId: string; reactions: MessageReaction[] }) => void) | null>(null);
 
   useEffect(() => {
     if (user && token) {
@@ -63,59 +75,45 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       });
 
       newSocket.on('connect', () => {
-        console.log('Connected to server');
         setIsConnected(true);
         newSocket.emit('join', user.id);
       });
 
       newSocket.on('disconnect', () => {
-        console.log('Disconnected from server');
         setIsConnected(false);
       });
 
-      // Listen for new messages
       newSocket.on('new_message', (message: ChatMessage) => {
-        console.log('New message received:', message);
         if (newMessageCallbackRef.current) {
           newMessageCallbackRef.current(message);
         }
       });
 
-      // Listen for message updates (for updating mediaPath of sending messages)
       newSocket.on('message_updated', (message: ChatMessage & { tempId?: string }) => {
-        console.log('Message updated:', message);
         if (messageUpdateCallbackRef.current) {
           messageUpdateCallbackRef.current(message);
         }
       });
 
-      // Listen for chat updates
       newSocket.on('chat_updated', (chat: Chat) => {
-        console.log('Chat updated:', chat);
         if (chatUpdateCallbackRef.current) {
           chatUpdateCallbackRef.current(chat);
         }
       });
 
-      // Listen for typing indicators
       newSocket.on('user_typing', (data: { userId: string; isTyping: boolean; conversationId: string }) => {
-        console.log('User typing:', data);
         if (userTypingCallbackRef.current) {
           userTypingCallbackRef.current(data);
         }
       });
 
-      // Listen for chat presence updates
       newSocket.on('chat_presence', (data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => {
-        console.log('Chat presence:', data);
         if (chatPresenceCallbackRef.current) {
           chatPresenceCallbackRef.current(data);
         }
       });
 
-      // Listen for reaction updates
-      newSocket.on('reaction_updated', (data: { messageId: string; reactions: any[] }) => {
-        console.log('Reaction updated:', data);
+      newSocket.on('reaction_updated', (data: { messageId: string; reactions: MessageReaction[] }) => {
         if (reactionUpdateCallbackRef.current) {
           reactionUpdateCallbackRef.current(data);
         }
@@ -129,13 +127,15 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
   }, [user, token]);
 
-  const sendMessage = (message: ChatMessage) => {
-
+  const sendMessage = useCallback((message: ChatMessage) => {
     if (socket && user) {
-      message.phone = message.phone || message.chatId + '@g.us';
-      socket.emit('send_message', message);
+      const normalizedMessage = {
+        ...message,
+        phone: normalizeOutgoingPhone(message.chatId, message.phone),
+      };
+      socket.emit('send_message', normalizedMessage);
     }
-  };
+  }, [socket, user]);
 
   const joinConversation = useCallback((conversationId: string) => {
     if (socket) {
@@ -191,11 +191,11 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     chatPresenceCallbackRef.current = callback;
   }, []);
 
-  const onReactionUpdate = useCallback((callback: (data: { messageId: string; reactions: any[] }) => void) => {
+  const onReactionUpdate = useCallback((callback: (data: { messageId: string; reactions: MessageReaction[] }) => void) => {
     reactionUpdateCallbackRef.current = callback;
   }, []);
 
-  const value = {
+  const value = React.useMemo(() => ({
     socket,
     sendMessage,
     joinConversation,
@@ -210,7 +210,22 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     emitTyping,
     on,
     off
-  };
+  }), [
+    socket,
+    sendMessage,
+    joinConversation,
+    leaveConversation,
+    isConnected,
+    onNewMessage,
+    onMessageUpdate,
+    onChatUpdate,
+    onUserTyping,
+    onChatPresence,
+    onReactionUpdate,
+    emitTyping,
+    on,
+    off
+  ]);
 
   return (
     <SocketContext.Provider value={value}>

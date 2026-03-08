@@ -58,7 +58,8 @@ export default function UsersPage() {
         params.append('search', search);
       }
 
-      const response = await fetch(`http://localhost:5000/api/users?${params.toString()}`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -119,7 +120,8 @@ export default function UsersPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/users/${userId}`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -150,7 +152,8 @@ export default function UsersPage() {
 
   const handleToggleUserStatus = async (user: User) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/users/${user.id}`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management/${user.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -175,7 +178,7 @@ export default function UsersPage() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-cyan-500 animate-spin mx-auto mb-4" />
+          <RefreshCw className="w-12 h-12 text-emerald-500 animate-spin mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Loading users...</p>
         </div>
       </div>
@@ -191,7 +194,7 @@ export default function UsersPage() {
           <p className="text-gray-600 dark:text-gray-400 mb-4">You do not have permission to access this page</p>
           <button
             onClick={() => router.push('/chat')}
-            className="px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600"
+            className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"
           >
             Go to Chat
           </button>
@@ -225,7 +228,7 @@ export default function UsersPage() {
                   placeholder="Search users..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 />
               </div>
             </form>
@@ -241,7 +244,7 @@ export default function UsersPage() {
               </button>
               <button
                 onClick={handleAddUser}
-                className="px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 flex items-center gap-2"
+                className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add User

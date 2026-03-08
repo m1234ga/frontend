@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import Image from 'next/image';
+import { createPortal } from 'react-dom';
 import { X, Download, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 
 interface ImageModalProps {
@@ -17,11 +18,17 @@ export const ImageModal: React.FC<ImageModalProps> = ({
   imageSrc,
   imageAlt = 'Image'
 }) => {
+  const [isMounted, setIsMounted] = React.useState(false);
   const [zoom, setZoom] = React.useState(1);
   const [rotation, setRotation] = React.useState(0);
   const [position, setPosition] = React.useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = React.useState(false);
   const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -32,6 +39,10 @@ export const ImageModal: React.FC<ImageModalProps> = ({
     }
   }, [isOpen]);
 
+  const handleClose = React.useCallback(() => {
+    onClose();
+  }, [onClose]);
+
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -39,7 +50,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({
 
       switch (event.key) {
         case 'Escape':
-          onClose();
+          handleClose();
           break;
         case '+':
         case '=':
@@ -65,7 +76,7 @@ export const ImageModal: React.FC<ImageModalProps> = ({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleClose]);
 
   // Handle mouse events for dragging
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -113,16 +124,16 @@ export const ImageModal: React.FC<ImageModalProps> = ({
     setZoom(prev => Math.max(0.5, Math.min(3, prev + delta)));
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !isMounted) return null;
 
-  return (
+  const modalContent = (
     <div 
-      className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
-      onClick={onClose}
+      className="fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center"
+      onClick={handleClose}
     >
       {/* Close button */}
       <button
-        onClick={onClose}
+        onClick={handleClose}
         className="absolute top-4 right-4 z-10 p-2 bg-black/50 hover:bg-black/70 rounded-full transition-colors"
         title="Close (Esc)"
       >
@@ -166,12 +177,12 @@ export const ImageModal: React.FC<ImageModalProps> = ({
 
       {/* Image container */}
       <div 
-        className="relative max-w-full max-h-full overflow-hidden"
+        className="relative w-screen h-screen overflow-hidden p-16"
         onWheel={handleWheel}
         onClick={(e) => e.stopPropagation()}
       >
         <div
-          className="relative"
+          className="relative w-full h-full"
           style={{
             transform: `translate(${position.x}px, ${position.y}px) scale(${zoom}) rotate(${rotation}deg)`,
             transition: isDragging ? 'none' : 'transform 0.2s ease-out',
@@ -185,12 +196,10 @@ export const ImageModal: React.FC<ImageModalProps> = ({
           <Image
             src={imageSrc}
             alt={imageAlt}
-            width={800}
-            height={600}
-            className="max-w-none"
+            fill
+            sizes="100vw"
+            className="object-contain"
             style={{
-              maxWidth: '90vw',
-              maxHeight: '90vh',
               objectFit: 'contain'
             }}
             priority
@@ -211,4 +220,6 @@ export const ImageModal: React.FC<ImageModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

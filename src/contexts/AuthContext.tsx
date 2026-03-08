@@ -1,16 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { jwtDecode, JwtPayload } from 'jwt-decode';
 
-interface DecodedToken extends JwtPayload {
-  userId: string;
-  username: string;
-  role?: string;
-}
-
-interface User {
+export interface User {
   id: string;
   username: string;
   email: string;
@@ -52,70 +45,75 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const router = useRouter();
+  const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
 
   const logout = useCallback(() => {
-    localStorage.setItem('token', '');
-    localStorage.setItem('user', '');
-    setToken(null);
-    setUser(null);
-    setAuthenticated(false);
-    router.push('/auth');
-  }, [router]);
+    fetch(`${baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => undefined).finally(() => {
+      setToken(null);
+      setUser(null);
+      setAuthenticated(false);
+      router.push('/auth');
+    });
+  }, [router, baseUrl]);
 
   useEffect(() => {
-    // Check for token in local storage on mount
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-
-    if (storedToken) {
+    const restoreSession = async () => {
       try {
-        const decoded = jwtDecode<DecodedToken>(storedToken);
-        const currentTime = Date.now() / 1000;
+        const response = await fetch(`${baseUrl}/api/auth/me`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
 
-        if (decoded.exp && decoded.exp < currentTime) {
-          // Token expired
-          logout();
-        } else {
-          setToken(storedToken);
+        if (response.ok) {
+          const data = await response.json();
+          setToken(data.token || null);
+          setUser({
+            id: data.id,
+            username: data.username,
+            email: data.email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            role: data.role,
+          });
           setAuthenticated(true);
-          if (storedUser) {
-            setUser(JSON.parse(storedUser));
-          } else {
-            // Optionally fetch user from API if not in local storage
-            // For now, reconstruct from token + placeholder or just rely on what we have
-            setUser({
-              id: decoded.userId,
-              username: decoded.username,
-              email: '', // Token might not have email
-              role: decoded.role
-            });
-          }
+        } else {
+          setToken(null);
+          setUser(null);
+          setAuthenticated(false);
         }
       } catch (error) {
-        console.error('Invalid token:', error);
-        logout();
+        setToken(null);
+        setUser(null);
+        setAuthenticated(false);
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
-  }, [logout]);
+    };
+
+    restoreSession();
+  }, [baseUrl]);
 
   const login = useCallback((newToken: string, newUser: User) => {
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
     setAuthenticated(true);
-    router.push('/Chat'); // Redirect to chat after login
+    router.push('/chat'); // Redirect to chat after login
   }, [router]);
 
-  const value: AuthContextType = {
+  const value = useMemo<AuthContextType>(() => ({
     user,
     token,
     login,
     logout,
     loading,
     authenticated,
-  };
+  }), [user, token, login, logout, loading, authenticated]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

@@ -37,6 +37,17 @@ interface ReportStats {
   activeAgents: number;
 }
 
+interface AgentPerformance {
+  agentId: string;
+  agentName: string;
+  responseTime: number;
+  customerSatisfaction: number;
+  totalAssignedChats?: number;
+  productivityScore?: number;
+  resolvedChats?: number;
+  isActive?: boolean;
+}
+
 export default function ReportsPage() {
   const { authenticated, loading, user, token } = useAuth();
   const router = useRouter();
@@ -54,6 +65,7 @@ export default function ReportsPage() {
     activeAgents: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [agentMetrics, setAgentMetrics] = useState<AgentPerformance[]>([]);
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -68,18 +80,42 @@ export default function ReportsPage() {
   const fetchReportsData = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/reports?dateRange=${dateRange}`, {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
+      const reportsResponse = await fetch(`${baseUrl}/api/reports?dateRange=${dateRange}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
-      if (response.ok) {
-        const data = await response.json();
+
+      const timeRangeMap: Record<string, string> = {
+        today: 'today',
+        yesterday: 'today',
+        '7days': 'week',
+        '30days': 'month',
+        '90days': 'quarter',
+        custom: 'week'
+      };
+      const dashboardRange = timeRangeMap[dateRange] || 'week';
+      const dashboardResponse = await fetch(`${baseUrl}/api/dashboard?timeRange=${dashboardRange}&field=general`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (reportsResponse.ok) {
+        const data = await reportsResponse.json();
         setStats(data);
       } else {
         console.error('Failed to fetch reports data');
+      }
+
+      if (dashboardResponse.ok) {
+        const dashboardData = await dashboardResponse.json();
+        setAgentMetrics(Array.isArray(dashboardData.agentMetrics) ? dashboardData.agentMetrics : []);
+      } else {
+        setAgentMetrics([]);
       }
     } catch (error) {
       console.error('Error fetching reports:', error);
@@ -88,11 +124,18 @@ export default function ReportsPage() {
     }
   };
 
+  const safeTotalMessages = stats.totalMessages > 0 ? stats.totalMessages : 1;
+  const safeTotalChats = stats.totalChats > 0 ? stats.totalChats : 1;
+  const firstResponseMinutes = Number(stats.avgResponseTime || 0).toFixed(1);
+  const avgResponseMinutes = Number(stats.avgResponseTime || 0).toFixed(1);
+  const avgResolutionMinutes = Number(stats.avgResolutionTime || 0).toFixed(1);
+  const withinSlaPercent = Math.round((stats.closedChats / safeTotalChats) * 100);
+
   if (loading || isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto"></div>
           <p className="mt-4 text-gray-600 dark:text-gray-400">Loading reports...</p>
         </div>
       </div>
@@ -148,7 +191,7 @@ export default function ReportsPage() {
       title: 'Active Agents',
       value: stats.activeAgents,
       icon: Users,
-      color: 'bg-cyan-500',
+      color: 'bg-emerald-500',
       change: '0%',
       trend: 'neutral'
     }
@@ -171,7 +214,7 @@ export default function ReportsPage() {
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             >
               <option value="today">Today</option>
               <option value="yesterday">Yesterday</option>
@@ -182,7 +225,7 @@ export default function ReportsPage() {
             </select>
             
             {/* Export Button */}
-            <button className="flex items-center space-x-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors">
+            <button className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors">
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
@@ -258,7 +301,7 @@ export default function ReportsPage() {
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                   <div 
                     className="bg-blue-500 h-2 rounded-full"
-                    style={{ width: `${(stats.sentMessages / stats.totalMessages) * 100}%` }}
+                    style={{ width: `${(stats.sentMessages / safeTotalMessages) * 100}%` }}
                   />
                 </div>
               </div>
@@ -272,7 +315,7 @@ export default function ReportsPage() {
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                   <div 
                     className="bg-green-500 h-2 rounded-full"
-                    style={{ width: `${(stats.receivedMessages / stats.totalMessages) * 100}%` }}
+                    style={{ width: `${(stats.receivedMessages / safeTotalMessages) * 100}%` }}
                   />
                 </div>
               </div>
@@ -314,7 +357,7 @@ export default function ReportsPage() {
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="10"
-                    strokeDasharray={`${(stats.closedChats / stats.totalChats) * 251.2} 251.2`}
+                    strokeDasharray={`${(stats.closedChats / safeTotalChats) * 251.2} 251.2`}
                     className="text-green-500"
                   />
                   <circle
@@ -324,8 +367,8 @@ export default function ReportsPage() {
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="10"
-                    strokeDasharray={`${(stats.openChats / stats.totalChats) * 251.2} 251.2`}
-                    strokeDashoffset={`-${(stats.closedChats / stats.totalChats) * 251.2}`}
+                    strokeDasharray={`${(stats.openChats / safeTotalChats) * 251.2} 251.2`}
+                    strokeDashoffset={`-${(stats.closedChats / safeTotalChats) * 251.2}`}
                     className="text-orange-500"
                   />
                 </svg>
@@ -346,7 +389,7 @@ export default function ReportsPage() {
                   <span className="text-sm text-gray-600 dark:text-gray-400">Closed</span>
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-white">
-                  {stats.closedChats} ({((stats.closedChats / stats.totalChats) * 100).toFixed(0)}%)
+                  {stats.closedChats} ({((stats.closedChats / safeTotalChats) * 100).toFixed(0)}%)
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -355,7 +398,7 @@ export default function ReportsPage() {
                   <span className="text-sm text-gray-600 dark:text-gray-400">Open</span>
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-white">
-                  {stats.openChats} ({((stats.openChats / stats.totalChats) * 100).toFixed(0)}%)
+                  {stats.openChats} ({((stats.openChats / safeTotalChats) * 100).toFixed(0)}%)
                 </span>
               </div>
             </div>
@@ -373,25 +416,25 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="text-center">
               <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-                1.2m
+                {firstResponseMinutes}m
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">First Response</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
-                3.5m
+                {avgResponseMinutes}m
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">Avg Response</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">
-                45m
+                {avgResolutionMinutes}m
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">Resolution Time</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
-                98%
+                {withinSlaPercent}%
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">Within SLA</div>
             </div>
@@ -409,30 +452,9 @@ export default function ReportsPage() {
               <Activity className="w-5 h-5 text-gray-400" />
             </div>
             <div className="space-y-3">
-              {[
-                { time: '9:00 - 10:00', messages: 156, percentage: 85 },
-                { time: '14:00 - 15:00', messages: 142, percentage: 78 },
-                { time: '11:00 - 12:00', messages: 128, percentage: 70 },
-                { time: '16:00 - 17:00', messages: 115, percentage: 63 },
-                { time: '10:00 - 11:00', messages: 98, percentage: 54 }
-              ].map((hour, index) => (
-                <div key={index}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {hour.time}
-                    </span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {hour.messages} msgs
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full"
-                      style={{ width: `${hour.percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+              <div className="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+                No hourly breakdown is available from the current reports API.
+              </div>
             </div>
           </div>
 
@@ -445,33 +467,9 @@ export default function ReportsPage() {
               <Tag className="w-5 h-5 text-gray-400" />
             </div>
             <div className="space-y-4">
-              {[
-                { tag: 'Support', count: 234, color: 'bg-blue-500' },
-                { tag: 'Sales', count: 189, color: 'bg-green-500' },
-                { tag: 'Billing', count: 156, color: 'bg-purple-500' },
-                { tag: 'Technical', count: 98, color: 'bg-orange-500' },
-                { tag: 'General', count: 67, color: 'bg-gray-500' }
-              ].map((item, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`${item.color} w-2 h-2 rounded-full`} />
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {item.tag}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                      <div 
-                        className={`${item.color} h-2 rounded-full`}
-                        style={{ width: `${(item.count / 234) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-gray-600 dark:text-gray-400 w-12 text-right">
-                      {item.count}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              <div className="text-sm text-gray-500 dark:text-gray-400 py-6 text-center">
+                No tags analytics are available from the current reports API.
+              </div>
             </div>
           </div>
         </div>
@@ -506,45 +504,52 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {[
-                  { name: 'John Smith', chats: 45, response: '2.1m', resolution: 96, rating: 4.8 },
-                  { name: 'Sarah Johnson', chats: 42, response: '2.5m', resolution: 94, rating: 4.7 },
-                  { name: 'Mike Davis', chats: 38, response: '3.2m', resolution: 92, rating: 4.6 },
-                  { name: 'Emma Wilson', chats: 35, response: '3.8m', resolution: 89, rating: 4.5 },
-                  { name: 'Alex Brown', chats: 31, response: '4.1m', resolution: 87, rating: 4.4 }
-                ].map((agent, index) => (
+                {agentMetrics.map((agent, index) => {
+                  const chatsHandled = agent.totalAssignedChats ?? agent.productivityScore ?? 0;
+                  const resolution = chatsHandled > 0
+                    ? Math.round(((agent.resolvedChats ?? 0) / chatsHandled) * 100)
+                    : 0;
+                  const rating = (agent.customerSatisfaction / 20).toFixed(1);
+                  const initials = agent.agentName
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2);
+
+                  return (
                   <tr 
-                    key={index}
+                    key={`${agent.agentId}-${index}`}
                     className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center">
+                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-full flex items-center justify-center">
                           <span className="text-white text-xs font-semibold">
-                            {agent.name.split(' ').map(n => n[0]).join('')}
+                            {initials || 'AG'}
                           </span>
                         </div>
                         <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {agent.name}
+                          {agent.agentName}
                         </span>
                       </div>
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
-                      {agent.chats}
+                      {chatsHandled}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-900 dark:text-white">
-                      {agent.response}
+                      {(agent.responseTime / 60).toFixed(1)}m
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-2">
                         <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 max-w-[80px]">
                           <div 
                             className="bg-green-500 h-2 rounded-full"
-                            style={{ width: `${agent.resolution}%` }}
+                            style={{ width: `${resolution}%` }}
                           />
                         </div>
                         <span className="text-sm text-gray-900 dark:text-white w-10">
-                          {agent.resolution}%
+                          {resolution}%
                         </span>
                       </div>
                     </td>
@@ -552,12 +557,20 @@ export default function ReportsPage() {
                       <div className="flex items-center space-x-1">
                         <Star className="w-4 h-4 text-yellow-500 fill-current" />
                         <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {agent.rating}
+                          {rating}
                         </span>
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
+                {agentMetrics.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-8 px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                      No agent performance data available.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

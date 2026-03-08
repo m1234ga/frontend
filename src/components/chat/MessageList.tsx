@@ -3,10 +3,12 @@
 import React, { memo, useMemo } from 'react';
 import { MemoizedMessage } from './Message';
 import { ChatMessage } from '../../../../Shared/Models';
+import { formatDateLabel } from '@/utils/date';
 
 interface MessageListProps {
   messages: ChatMessage[];
   favoriteMessages: ChatMessage[];
+  currentUserId?: string | null;
   toggleFavorite: (m: ChatMessage) => void;
   onForward: (m: ChatMessage) => void;
   onDelete: (m: ChatMessage) => void;
@@ -19,38 +21,10 @@ interface MessageListProps {
   onMenuToggle: (id: string) => void;
 }
 
-const isSameDay = (d1: Date, d2: Date) => {
-  return d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
-};
-
-const formatDateLabel = (date: Date) => {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-  if (msgDate.getTime() === today.getTime()) return 'Today';
-  if (msgDate.getTime() === yesterday.getTime()) return 'Yesterday';
-
-  const diffDays = Math.floor((today.getTime() - msgDate.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 7) {
-    return date.toLocaleDateString('en-US', { weekday: 'long' });
-  }
-
-  return date.toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  });
-};
-
 const MessageList: React.FC<MessageListProps> = ({
   messages,
   favoriteMessages,
+  currentUserId,
   toggleFavorite,
   onForward,
   onDelete,
@@ -75,6 +49,7 @@ const MessageList: React.FC<MessageListProps> = ({
   }
 
   let lastDate: string | null = null;
+  let previousMessage: ChatMessage | null = null;
 
   return (
     <>
@@ -85,17 +60,28 @@ const MessageList: React.FC<MessageListProps> = ({
         const showSeparator = lastDate !== dateString;
         lastDate = dateString;
 
+        const sameSenderAsPrevious = previousMessage
+          ? previousMessage.isFromMe === message.isFromMe &&
+            (previousMessage.contactId || previousMessage.ContactId) === (message.contactId || message.ContactId)
+          : false;
+        const previousTs = previousMessage ? new Date(previousMessage.timeStamp || previousMessage.timestamp || Date.now()).getTime() : 0;
+        const currentTs = new Date(message.timeStamp || message.timestamp || Date.now()).getTime();
+        const withinGroupWindow = previousMessage ? (currentTs - previousTs) < 4 * 60 * 1000 : false;
+        const showSenderMeta = !sameSenderAsPrevious || !withinGroupWindow || showSeparator;
+        previousMessage = message;
+
         return (
           <React.Fragment key={message.id}>
             {showSeparator && (
-              <div className="flex justify-center my-6 sticky top-2 z-10">
-                <span className="px-4 py-1.5 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md text-gray-500 dark:text-gray-400 text-[11px] font-bold rounded-xl shadow-soft-sm border border-gray-100/50 dark:border-gray-700/50">
+              <div className="flex justify-center my-2 z-10">
+                <span className="px-3 py-1 bg-white/90 dark:bg-gray-800/90 backdrop-blur-md text-gray-500 dark:text-gray-400 text-[11px] font-bold rounded-xl shadow-soft-sm border border-gray-100/50 dark:border-gray-700/50">
                   {formatDateLabel(messageDate)}
                 </span>
               </div>
             )}
             <MemoizedMessage
               message={message}
+              currentUserId={currentUserId}
               onToggleFavorite={toggleFavorite}
               isFavorite={isFavorite}
               onForward={onForward}
@@ -107,6 +93,7 @@ const MessageList: React.FC<MessageListProps> = ({
               onReact={onReact}
               isMenuOpen={openMessageMenuId === message.id}
               onMenuToggle={() => onMenuToggle(message.id)}
+              showName={showSenderMeta}
             />
           </React.Fragment>
         );

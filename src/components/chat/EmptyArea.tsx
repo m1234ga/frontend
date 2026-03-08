@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   MessageSquare,
@@ -10,13 +10,66 @@ import {
   ArrowRight
 } from "lucide-react";
 import { Chat as ChatModel } from "../../../../Shared/Models";
+import type { User as AuthUser } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface EmptyAreaProps {
   conversations: ChatModel[];
-  currentUser: any;
+  currentUser: AuthUser | null;
+}
+
+interface StatCardProps {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+  color: 'blue' | 'green' | 'purple' | 'amber';
+  description: string;
+  highlight?: boolean;
+}
+
+interface ProgressStatProps {
+  label: string;
+  value: number;
+  total: number;
+  color: string;
 }
 
 export function EmptyArea({ conversations, currentUser }: EmptyAreaProps) {
+  const { token } = useAuth();
+  const [userIndicators, setUserIndicators] = useState({ activeUsers: 0, totalUsers: 0 });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchUserIndicators = async () => {
+      try {
+        const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
+        const response = await fetch(`${baseUrl}/api/dashboard?timeRange=today&field=general`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
+
+        if (!response.ok || cancelled) return;
+
+        const data = await response.json();
+        if (cancelled) return;
+
+        const activeUsers = Number(data?.activeUsers ?? data?.allUsers ?? 0) || 0;
+        const totalUsers = Number(data?.totalUsers ?? 0) || 0;
+        setUserIndicators({ activeUsers, totalUsers });
+      } catch {
+        // Keep default indicators on network/API errors.
+      }
+    };
+
+    fetchUserIndicators();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   const stats = useMemo(() => {
     if (!currentUser) return null;
 
@@ -51,6 +104,8 @@ export function EmptyArea({ conversations, currentUser }: EmptyAreaProps) {
     );
   }
 
+  const joinedOtherAgents = Math.max(0, (userIndicators.activeUsers || userIndicators.totalUsers || 0) - 1);
+
   const getTimeGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good Morning";
@@ -77,7 +132,11 @@ export function EmptyArea({ conversations, currentUser }: EmptyAreaProps) {
             </div>
             <div className="pr-4">
               <span className="block text-[10px] uppercase tracking-wider font-bold text-gray-400">System Status</span>
-              <span className="block text-sm font-bold text-gray-900 dark:text-white">Active & Healthy</span>
+              <span className="block text-sm font-bold text-gray-900 dark:text-white">
+                {userIndicators.activeUsers > 0
+                  ? `${userIndicators.activeUsers}/${userIndicators.totalUsers || userIndicators.activeUsers} Active`
+                  : 'Active & Healthy'}
+              </span>
             </div>
           </div>
         </div>
@@ -158,7 +217,7 @@ export function EmptyArea({ conversations, currentUser }: EmptyAreaProps) {
                     </div>
                   ))}
                 </div>
-                <span className="ml-3 text-xs font-medium text-gray-500 dark:text-gray-400">Join other 12 agents</span>
+                <span className="ml-3 text-xs font-medium text-gray-500 dark:text-gray-400">Join other {joinedOtherAgents} agents</span>
               </div>
             </div>
           </div>
@@ -184,8 +243,8 @@ export function EmptyArea({ conversations, currentUser }: EmptyAreaProps) {
   );
 }
 
-function StatCard({ title, value, icon, color, description, highlight }: any) {
-  const colors: any = {
+function StatCard({ title, value, icon, color, description, highlight }: StatCardProps) {
+  const colors: Record<StatCardProps['color'], string> = {
     blue: "bg-blue-50 dark:bg-blue-500/10",
     green: "bg-green-50 dark:bg-green-500/10",
     purple: "bg-purple-50 dark:bg-purple-500/10",
@@ -206,7 +265,7 @@ function StatCard({ title, value, icon, color, description, highlight }: any) {
   );
 }
 
-function ProgressStat({ label, value, total, color }: any) {
+function ProgressStat({ label, value, total, color }: ProgressStatProps) {
   const percentage = total > 0 ? (value / total) * 100 : 0;
 
   return (

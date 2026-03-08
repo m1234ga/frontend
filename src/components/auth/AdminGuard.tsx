@@ -55,7 +55,7 @@ export const AdminGuard: React.FC<AdminGuardProps> = ({
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-cyan-500 animate-spin mx-auto mb-4" />
+          <RefreshCw className="w-12 h-12 text-emerald-500 animate-spin mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400">Checking permissions...</p>
         </div>
       </div>

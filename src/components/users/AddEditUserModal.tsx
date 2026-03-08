@@ -94,7 +94,8 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
 
       if (user) {
         // Update existing user
-        const response = await fetch(`http://localhost:5000/api/users/${user.id}`, {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+        const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management/${user.id}`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -115,7 +116,8 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
         }
       } else {
         // Create new user
-        const response = await fetch('http://localhost:5000/api/users', {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+        const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -161,8 +163,8 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg">
-              <UserPlus className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+              <UserPlus className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               {user ? 'Edit User' : 'Add New User'}
@@ -194,7 +196,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
                 type="text"
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 required
                 disabled={loading}
               />
@@ -210,7 +212,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               required
               disabled={loading}
             />
@@ -225,7 +227,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
               type="text"
               value={formData.firstName}
               onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               disabled={loading}
             />
           </div>
@@ -239,7 +241,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
               type="text"
               value={formData.lastName}
               onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               disabled={loading}
             />
           </div>
@@ -255,7 +257,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   required={!user}
                   disabled={loading}
                 />
@@ -269,7 +271,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
                   type="password"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                   required={!user}
                   disabled={loading}
                 />
@@ -281,7 +283,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
                   id="temporary"
                   checked={formData.temporary}
                   onChange={(e) => setFormData({ ...formData, temporary: e.target.checked })}
-                  className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-cyan-500"
+                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
                   disabled={loading}
                 />
                 <label htmlFor="temporary" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
@@ -300,7 +302,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
                   id="enabled"
                   checked={formData.enabled}
                   onChange={(e) => setFormData({ ...formData, enabled: e.target.checked })}
-                  className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-cyan-500"
+                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
                   disabled={loading}
                 />
                 <label htmlFor="enabled" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
@@ -314,7 +316,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
                   id="emailVerified"
                   checked={formData.emailVerified}
                   onChange={(e) => setFormData({ ...formData, emailVerified: e.target.checked })}
-                  className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-cyan-500"
+                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
                   disabled={loading}
                 />
                 <label htmlFor="emailVerified" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
@@ -336,7 +338,7 @@ export const AddEditUserModal: React.FC<AddEditUserModalProps> = ({
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-600 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading}
             >
               <Save className="w-4 h-4" />

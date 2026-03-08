@@ -42,7 +42,8 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
       setError(null);
 
       // Fetch user's current roles
-      const userRolesResponse = await fetch(`http://localhost:5000/api/users/${user?.id}/roles`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+      const userRolesResponse = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management/${user?.id}/roles`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -56,7 +57,7 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
       setUserRoles(userRolesData.roles || []);
 
       // Fetch available roles
-      const availableRolesResponse = await fetch(`http://localhost:5000/api/users/${user?.id}/available-roles`, {
+      const availableRolesResponse = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management/${user?.id}/available-roles`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -101,7 +102,8 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
 
       const rolesToAdd = availableRoles.filter(role => selectedRoles.has(role.name));
 
-      const response = await fetch(`http://localhost:5000/api/users/${user?.id}/roles`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management/${user?.id}/roles`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -142,7 +144,8 @@ export const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`http://localhost:5000/api/users/${user?.id}/roles`, {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/api/user-management/${user?.id}/roles`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -65,9 +65,9 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
   const pickerRef = useRef<HTMLDivElement>(null);
 
   // Filter emojis based on search term
-  const filteredEmojis = EMOJI_LIST.filter(emoji => 
-    emoji.includes(searchTerm) || 
-    (searchTerm && emoji.includes(searchTerm))
+  const normalizedSearch = (searchTerm || '').toLowerCase();
+  const filteredEmojis = EMOJI_LIST.filter((emoji) =>
+    String(emoji ?? '').toLowerCase().includes(normalizedSearch)
   );
 
   // Close picker when clicking outside

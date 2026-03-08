@@ -1,6 +1,6 @@
 'use client';
-const baseApiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/');
-const apiUrl = baseApiUrl + 'Chat/api';
+const baseApiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
+const apiUrl = baseApiUrl + '/api/chat/api';
 export default function Chat(token: string) {
   async function GetContacts() {
     try {
@@ -59,7 +59,7 @@ export default function Chat(token: string) {
     }
   };
 
-  async function GetChatsPage(page = 1, limit = 25, status?: string) {
+  async function GetChatsPage(page = 1, limit = 200, status?: string) {
     try {
       const url = new URL(apiUrl + '/GetChatsPage');
       url.searchParams.set('page', String(page));
@@ -129,14 +129,39 @@ export default function Chat(token: string) {
       return "Error";
     }
   }
-  async function GetMessagesById(id: string, limit: number = 10, before?: string) {
+
+  async function GetWuzProfile(phone: string) {
     try {
-      let url = `${apiUrl}/GetMessages/${id}?limit=${limit}`;
-      if (before) {
-        url += `&before=${before}`;
+      const response = await fetch(`${apiUrl}/GetWuzProfile/${encodeURIComponent(phone)}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        return await response.json();
       }
 
-      const response = await fetch(url, {
+      throw new Error('Failed to fetch Wuz profile');
+    } catch (error) {
+      console.error('Error fetching Wuz profile:', error);
+      throw error;
+    }
+  }
+  async function GetMessagesById(id: string, limit: number = 10, before?: string, beforeId?: string) {
+    try {
+      const url = new URL(`${apiUrl}/GetMessages/${id}`);
+      url.searchParams.set('limit', String(limit));
+      if (before) {
+        url.searchParams.set('before', before);
+      }
+      if (beforeId) {
+        url.searchParams.set('beforeId', beforeId);
+      }
+
+      const response = await fetch(url.toString(), {
         method: "GET",
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -202,12 +227,14 @@ export default function Chat(token: string) {
     }
   };
 
-  async function SendAudio(phone: string, audioFile: File, replyToId?: string) {
+  async function SendAudio(phone: string, audioFile: File, replyToId?: string, seconds?: number, waveform?: number[]) {
     try {
       const formData = new FormData();
       formData.append('audio', audioFile);
       formData.append('phone', phone);
       if (replyToId) formData.append('replyToId', replyToId);
+      if (seconds) formData.append('seconds', seconds.toString());
+      if (waveform) formData.append('waveform', JSON.stringify(waveform));
 
       const response = await fetch(apiUrl + '/sendAudio', {
         method: 'POST',
@@ -452,7 +479,7 @@ export default function Chat(token: string) {
   // User management for assignment
   async function GetUsers() {
     try {
-      const response = await fetch(baseApiUrl + `api/users`, {
+      const response = await fetch(baseApiUrl + `/api/user-management`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -923,7 +950,8 @@ export default function Chat(token: string) {
     CreateNewChat,
     GetChatsPage,
     RefreshChatAvatar,
-    GetWuzUserInfo
+    GetWuzUserInfo,
+    GetWuzProfile
   }
 }
 

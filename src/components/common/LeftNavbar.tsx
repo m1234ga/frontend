@@ -11,6 +11,7 @@ import {
   MessageSquare,
   Settings,
   Users,
+  UserRound,
   Home,
   TrendingUp
 } from 'lucide-react';
@@ -44,6 +45,13 @@ export const LeftNavbar = () => {
       label: 'Reports',
       path: '/reports',
       color: 'text-purple-500',
+      requiresAdmin: false
+    },
+    {
+      icon: UserRound,
+      label: 'Contacts',
+      path: '/contacts',
+      color: 'text-cyan-500',
       requiresAdmin: false
     },
     {

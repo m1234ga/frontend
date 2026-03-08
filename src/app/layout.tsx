@@ -1,26 +1,31 @@
-'use client';
-
 import "./globals.css";
-import { Inter } from 'next/font/google';
-import { AuthProvider } from '@/contexts/AuthContext';
-import { SocketProvider } from '@/contexts/SocketContext';
-import { ThemeProvider } from '@/contexts/ThemeContext';
-import { LeftNavbar } from '@/components/common/LeftNavbar';
-import { usePathname } from 'next/navigation';
-import { Toaster } from 'react-hot-toast';
+import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
+import { ClientProviders } from '@/components/providers/ClientProviders';
 
-const inter = Inter({ subsets: ['latin'] });
+const plexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-ui'
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-mono'
+});
+
+export const metadata = {
+  title: 'Tech Waves Solutions - Chat',
+  description: 'Real-time chat application',
+};
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const pathname = usePathname();
-  const showNavbar = pathname !== '/auth' && pathname !== '/';
-
   return (
-    <html suppressHydrationWarning>
+    <html suppressHydrationWarning lang="en">
       <head>
         <script dangerouslySetInnerHTML={{
           __html: `
@@ -35,24 +40,10 @@ export default function RootLayout({
           `
         }} />
       </head>
-      <body className={inter.className}>
-        <ThemeProvider>
-          <AuthProvider>
-            <SocketProvider>
-              <Toaster position="top-right" />
-              {showNavbar ? (
-                <div className="flex h-screen">
-                  <LeftNavbar />
-                  <div className="flex-1 overflow-hidden">
-                    {children}
-                  </div>
-                </div>
-              ) : (
-                children
-              )}
-            </SocketProvider>
-          </AuthProvider>
-        </ThemeProvider>
+      <body className={`${plexSans.variable} ${plexMono.variable}`}>
+        <ClientProviders>
+          {children}
+        </ClientProviders>
       </body>
     </html>
   );
