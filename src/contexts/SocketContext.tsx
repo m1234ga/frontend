@@ -4,6 +4,34 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { Chat, ChatMessage, MessageReaction } from '@shared/Models';
 
+// --- Notification sound (synthesised beep, no file needed) ---
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.3);
+  } catch {
+    // AudioContext not available (SSR or restricted)
+  }
+}
+
+// --- Tab title / unread badge helpers ---
+const BASE_TITLE = typeof document !== 'undefined' ? document.title || 'Chat' : 'Chat';
+
+function setTabUnread(count: number) {
+  if (typeof document === 'undefined') return;
+  document.title = count > 0 ? `(${count}) ${BASE_TITLE}` : BASE_TITLE;
+}
+
 const normalizeOutgoingPhone = (chatId: string, phone?: string): string => {
   const rawChatId = (chatId || '').trim();
   const rawPhone = (phone || '').trim();
@@ -52,6 +80,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const { user, token } = useAuth();
 
+  // Tracks total unread count across all chats for the tab title
+  const totalUnreadRef = useRef<number>(0);
+  const chatUnreadMapRef = useRef<Map<string, number>>(new Map());
+
   // Use refs to store callbacks to prevent re-renders
   const newMessageCallbackRef = useRef<((message: ChatMessage) => void) | null>(null);
   const messageUpdateCallbackRef = useRef<((message: ChatMessage & { tempId?: string }) => void) | null>(null);
@@ -84,6 +116,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       });
 
       newSocket.on('new_message', (message: ChatMessage) => {
+        // Play sound only for incoming (not sent by me) messages
+        if (!message.isFromMe) {
+          playNotificationSound();
+        }
         if (newMessageCallbackRef.current) {
           newMessageCallbackRef.current(message);
         }
@@ -96,6 +132,20 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       });
 
       newSocket.on('chat_updated', (chat: Chat) => {
+        // Keep running unread total for the tab title
+        const chatId = (chat as unknown as Record<string, unknown>).id as string | undefined;
+        const rawUnread = (chat as unknown as Record<string, unknown>).unread_count
+          ?? (chat as unknown as Record<string, unknown>).unReadCount
+          ?? chat.unreadCount;
+        const unread = typeof rawUnread === 'number' ? rawUnread : 0;
+
+        if (chatId) {
+          const prev = chatUnreadMapRef.current.get(chatId) ?? 0;
+          chatUnreadMapRef.current.set(chatId, unread);
+          totalUnreadRef.current = Math.max(0, totalUnreadRef.current - prev + unread);
+          setTabUnread(totalUnreadRef.current);
+        }
+
         if (chatUpdateCallbackRef.current) {
           chatUpdateCallbackRef.current(chat);
         }
@@ -123,6 +173,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
 
       return () => {
         newSocket.close();
+        setTabUnread(0);
+        chatUnreadMapRef.current.clear();
+        totalUnreadRef.current = 0;
       };
     }
   }, [user, token]);
