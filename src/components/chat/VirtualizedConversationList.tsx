@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { List } from 'react-window';
 import { Chat as ChatModel } from '../../../../Shared/Models';
 import { ConversationItem } from './ConversationItem';
@@ -16,6 +16,8 @@ interface VirtualizedConversationListProps {
     onToggleStatus?: (chatId: string, currentStatus: string) => void;
     onOpenTagManager?: (chat: ChatModel) => void;
     formatTime: (date?: string | number | Date) => string;
+    hasMore?: boolean;
+    onLoadMore?: () => void;
 }
 
 interface RowProps {
@@ -86,8 +88,12 @@ export const VirtualizedConversationList: React.FC<VirtualizedConversationListPr
     onAssign,
     onToggleStatus,
     onOpenTagManager,
-    formatTime
+    formatTime,
+    hasMore = false,
+    onLoadMore
 }) => {
+    const lastRequestedIndexRef = useRef(-1);
+
     const itemData = useMemo(() => ({
         conversations,
         selectedConversationId,
@@ -112,6 +118,25 @@ export const VirtualizedConversationList: React.FC<VirtualizedConversationListPr
         formatTime
     ]);
 
+    const handleRowsRendered = useCallback((visibleRows: { startIndex: number; stopIndex: number }) => {
+        if (!hasMore || !onLoadMore || conversations.length === 0) {
+            lastRequestedIndexRef.current = -1;
+            return;
+        }
+
+        const triggerIndex = Math.max(0, conversations.length - 5);
+        if (visibleRows.stopIndex < triggerIndex) {
+            return;
+        }
+
+        if (lastRequestedIndexRef.current === conversations.length) {
+            return;
+        }
+
+        lastRequestedIndexRef.current = conversations.length;
+        onLoadMore();
+    }, [conversations.length, hasMore, onLoadMore]);
+
     if (conversations.length === 0) {
         return (
             <div className="p-8 text-center theme-text-accent font-bold opacity-60 italic">
@@ -129,6 +154,7 @@ export const VirtualizedConversationList: React.FC<VirtualizedConversationListPr
                 rowProps={{ data: itemData }}
                 overscanCount={5}
                 className="no-scrollbar"
+                onRowsRendered={handleRowsRendered}
                 rowComponent={Row}
             />
         </div>

@@ -59,12 +59,13 @@ export default function Chat(token: string) {
     }
   };
 
-  async function GetChatsPage(page = 1, limit = 200, status?: string) {
+  async function GetChatsPage(page = 1, limit = 200, status?: string, tab?: string) {
     try {
       const url = new URL(apiUrl + '/GetChatsPage');
       url.searchParams.set('page', String(page));
       url.searchParams.set('limit', String(limit));
       if (status) url.searchParams.set('status', status);
+      if (tab) url.searchParams.set('tab', tab);
 
       const response = await fetch(url.toString(), {
         method: 'GET',

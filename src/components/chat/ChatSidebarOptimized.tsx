@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { SidebarHeader } from './SidebarHeader';
 import { SidebarActions } from './SidebarActions';
 import { SidebarSearch } from './SidebarSearch';
@@ -143,7 +143,6 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
     selectedConversationId,
     onLogout
 }) => {
-    const chatsPerPage = 25;
     const serverPageSize = 200;
     const { user, token } = useAuth();
     const { onChatUpdate, onChatPresence, sendMessage } = useSocket();
@@ -157,7 +156,6 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
 
     // Local UI State
     const [activeTab, setActiveTab] = useState<SidebarTabType>('chats');
-    const [currentPage, setCurrentPage] = useState(1);
     const [serverPage, setServerPage] = useState(1);
     const [hasMoreServerPages, setHasMoreServerPages] = useState(false);
     const [isServerLoading, setIsServerLoading] = useState(false);
@@ -187,6 +185,11 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
     const [contactTypeFilter, setContactTypeFilter] = useState<'all' | 'contact' | 'lead'>('all');
     const [contactSortBy, setContactSortBy] = useState<'name' | 'phone'>('name');
     const [contactSearchTerm, setContactSearchTerm] = useState('');
+    const latestConversationsRef = useRef<ChatModel[]>([]);
+
+    useEffect(() => {
+        latestConversationsRef.current = conversations;
+    }, [conversations]);
 
     // Server-side conversation pagination by tab
     useEffect(() => {
@@ -201,7 +204,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                 ? 'closed'
                 : undefined;
 
-        chatRouter.GetChatsPage(serverPage, serverPageSize, status)
+        chatRouter.GetChatsPage(serverPage, serverPageSize, status, activeTab)
             .then((data) => {
                 if (cancelled) return;
 
@@ -214,7 +217,14 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                 const chats = Array.isArray(rawChats) ? rawChats : [];
                 const normalized = chats.map((conv) => normalizeConversation(conv as ChatModel));
 
-                setConversations(normalized);
+                const merged = serverPage === 1
+                    ? normalized
+                    : [
+                        ...latestConversationsRef.current,
+                        ...normalized.filter((conversation) => !latestConversationsRef.current.some((existing) => existing.id === conversation.id))
+                    ];
+
+                setConversations(merged);
                 setHasMoreServerPages(chats.length >= serverPageSize);
             })
             .catch((error) => {
@@ -358,27 +368,6 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
 
         return result;
     }, [conversations, activeTab, searchTerm, selectedTagId, filters, user?.id]);
-
-    const totalConversationPages = Math.max(1, Math.ceil(filteredConversations.length / chatsPerPage));
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [activeTab, searchTerm, selectedTagId, filters]);
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [serverPage]);
-
-    useEffect(() => {
-        if (currentPage > totalConversationPages) {
-            setCurrentPage(totalConversationPages);
-        }
-    }, [currentPage, totalConversationPages]);
-
-    const paginatedConversations = useMemo(() => {
-        const start = (currentPage - 1) * chatsPerPage;
-        return filteredConversations.slice(start, start + chatsPerPage);
-    }, [filteredConversations, currentPage, chatsPerPage]);
 
     const filteredContacts = useMemo(() => {
         const lower = contactSearchTerm.trim().toLowerCase();
@@ -582,12 +571,21 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         return Array.from(tagsMap.values());
     }, [conversations]);
 
-    const showServerPagination = activeTab !== 'contacts' && (serverPage > 1 || hasMoreServerPages || conversations.length > 0);
     const handleTabChange = useCallback((tab: SidebarTabType) => {
         setActiveTab(tab);
         setServerPage(1);
-        setCurrentPage(1);
-    }, []);
+        setHasMoreServerPages(false);
+        latestConversationsRef.current = [];
+        setConversations([]);
+    }, [setConversations]);
+
+    const handleLoadMoreConversations = useCallback(() => {
+        if (activeTab === 'contacts' || isServerLoading || !hasMoreServerPages) {
+            return;
+        }
+
+        setServerPage((prev) => prev + 1);
+    }, [activeTab, hasMoreServerPages, isServerLoading]);
 
     return (
         <>
@@ -770,7 +768,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                         <div className="h-full flex flex-col">
                             <div className="flex-1 min-h-0">
                                 <VirtualizedConversationList
-                                    conversations={paginatedConversations}
+                                    conversations={filteredConversations}
                                     selectedConversationId={selectedConversationId}
                                     onSelectConversation={onSelectConversation}
                                     onArchive={handleArchive}
@@ -779,62 +777,14 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                                     onAssign={handleAssignTrigger}
                                     onOpenTagManager={handleOpenTagManager}
                                     formatTime={formatTime}
+                                    hasMore={hasMoreServerPages}
+                                    onLoadMore={handleLoadMoreConversations}
                                 />
                             </div>
 
-                            {(showServerPagination || (filteredConversations.length > 0 && totalConversationPages > 1)) && (
-                                <div className="px-3 py-2 border-t theme-border-primary bg-white/90 dark:bg-gray-950/90 space-y-2">
-                                    {showServerPagination && (
-                                        <div className="flex items-center justify-between">
-                                            <button
-                                                type="button"
-                                                onClick={() => setServerPage((prev) => Math.max(1, prev - 1))}
-                                                disabled={serverPage === 1 || isServerLoading}
-                                                className="px-2.5 py-1.5 rounded-md text-xs font-semibold border theme-border-primary theme-text-secondary disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-500/10"
-                                            >
-                                                Previous Data Page
-                                            </button>
-
-                                            <p className="text-xs theme-text-secondary font-semibold">
-                                                Server page {serverPage}
-                                            </p>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => setServerPage((prev) => prev + 1)}
-                                                disabled={!hasMoreServerPages || isServerLoading}
-                                                className="px-2.5 py-1.5 rounded-md text-xs font-semibold border theme-border-primary theme-text-secondary disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-500/10"
-                                            >
-                                                Next Data Page
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {filteredConversations.length > 0 && totalConversationPages > 1 && (
-                                        <div className="flex items-center justify-between">
-                                            <button
-                                                type="button"
-                                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                                                disabled={currentPage === 1}
-                                                className="px-2.5 py-1.5 rounded-md text-xs font-semibold border theme-border-primary theme-text-secondary disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-500/10"
-                                            >
-                                                Previous View Page
-                                            </button>
-
-                                            <p className="text-xs theme-text-secondary font-semibold">
-                                                View page {currentPage} of {totalConversationPages}
-                                            </p>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => setCurrentPage((prev) => Math.min(totalConversationPages, prev + 1))}
-                                                disabled={currentPage === totalConversationPages}
-                                                className="px-2.5 py-1.5 rounded-md text-xs font-semibold border theme-border-primary theme-text-secondary disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-500/10"
-                                            >
-                                                Next View Page
-                                            </button>
-                                        </div>
-                                    )}
+                            {isServerLoading && filteredConversations.length > 0 && (
+                                <div className="px-3 py-2 border-t theme-border-primary bg-white/90 dark:bg-gray-950/90 flex items-center justify-center">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-emerald-500"></div>
                                 </div>
                             )}
                         </div>
