@@ -57,6 +57,7 @@ interface SocketContextType {
   onChatPresence: (callback: (data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) => void;
   onReactionUpdate: (callback: (data: { messageId: string; reactions: MessageReaction[] }) => void) => void;
   emitTyping: (conversationId: string, isTyping: boolean) => void;
+  forwardMessage: (originalMessage: ChatMessage, targetChatId: string, targetPhone: string) => void;
   on: (event: string, callback: (...args: unknown[]) => void) => void;
   off: (event: string, callback: (...args: unknown[]) => void) => void;
 }
@@ -212,6 +213,30 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     }
   }, [socket, user]);
 
+  const forwardMessage = useCallback((originalMessage: ChatMessage, targetChatId: string, targetPhone: string) => {
+    if (socket && user) {
+      // Sanitize originalMessage to match backend chatMessageSchema:
+      // - phone is required; fall back to chatId if missing
+      // - replyToMessageId and mediaPath must be string | undefined, not null
+      const sanitized: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(originalMessage)) {
+        if (v !== null && v !== undefined) {
+          sanitized[k] = v;
+        }
+      }
+      if (!sanitized['phone']) {
+        sanitized['phone'] = (originalMessage.chatId || targetPhone || '').replace(/@[^@]+$/, '');
+      }
+
+      socket.emit('message_forwarded', {
+        originalMessage: sanitized,
+        targetChatId,
+        targetPhone,
+        senderId: user.id,
+      });
+    }
+  }, [socket, user]);
+
   const on = useCallback((event: string, callback: (...args: unknown[]) => void) => {
     if (socket) {
       socket.on(event, callback);
@@ -261,6 +286,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     onChatPresence,
     onReactionUpdate,
     emitTyping,
+    forwardMessage,
     on,
     off
   }), [
@@ -276,6 +302,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     onChatPresence,
     onReactionUpdate,
     emitTyping,
+    forwardMessage,
     on,
     off
   ]);

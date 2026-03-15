@@ -74,7 +74,7 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
     // Refs
     const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-    const { onChatPresence, onUserTyping } = useSocket();
+    const { onChatPresence, onUserTyping, forwardMessage } = useSocket();
     const { user } = useAuth();
     const chatRouter = useChatApi();
 
@@ -462,8 +462,8 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
                     }}
                     message={messageState.messageToForward}
                     conversations={conversations}
-                    onForward={(chatId) => {
-                        console.log('Forward to:', chatId);
+                    onForward={(message, targetChatId, targetPhone) => {
+                        forwardMessage(message, targetChatId, targetPhone);
                         setUiState(prev => ({ ...prev, showForwardModal: false }));
                         setMessageState(prev => ({ ...prev, messageToForward: null }));
                     }}

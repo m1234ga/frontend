@@ -16,6 +16,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
     onLogout
 }) => {
     const [showProfileMenu, setShowProfileMenu] = useState(false);
+    const hasAdminAccess = user?.role === 'admin' || user?.role === 'user-manager';
 
     return (
         <div className="tech-header p-4 flex items-center justify-between">
@@ -46,16 +47,18 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                     </button>
                     {showProfileMenu && (
                         <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-10 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                            <a
-                                href="/dashboard"
-                                className="flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left transition-colors"
-                            >
-                                <BarChart3 className="w-4 h-4 mr-2" />
-                                Dashboard
-                            </a>
+                            {hasAdminAccess && (
+                                <a
+                                    href="/dashboard"
+                                    className="flex items-center px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left transition-colors"
+                                >
+                                    <BarChart3 className="w-4 h-4 mr-2" />
+                                    Dashboard
+                                </a>
+                            )}
                             <button
                                 onClick={onLogout}
-                                className="flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left transition-colors border-t border-gray-100 dark:border-gray-700"
+                                className={`flex items-center px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 w-full text-left transition-colors ${hasAdminAccess ? 'border-t border-gray-100 dark:border-gray-700' : ''}`}
                             >
                                 <LogOut className="w-4 h-4 mr-2" />
                                 Logout

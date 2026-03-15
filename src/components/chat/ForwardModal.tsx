@@ -49,6 +49,7 @@ export const ForwardModal: React.FC<ForwardModalProps> = ({
 
     setIsForwarding(true);
     try {
+      debugger;
       await onForward(message, selectedChatId, targetConversation.phone || selectedChatId);
       onClose();
     } catch (error) {

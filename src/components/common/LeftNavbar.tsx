@@ -38,21 +38,21 @@ export const LeftNavbar = () => {
       label: 'Dashboard',
       path: '/dashboard',
       color: 'text-blue-500',
-      requiresAdmin: false
+      requiresAdmin: true
     },
     {
       icon: TrendingUp,
       label: 'Reports',
       path: '/reports',
       color: 'text-purple-500',
-      requiresAdmin: false
+      requiresAdmin: true
     },
     {
       icon: UserRound,
       label: 'Contacts',
       path: '/contacts',
       color: 'text-cyan-500',
-      requiresAdmin: false
+      requiresAdmin: true
     },
     {
       icon: Users,
@@ -66,7 +66,7 @@ export const LeftNavbar = () => {
       label: 'Settings',
       path: '/settings',
       color: 'text-gray-500',
-      requiresAdmin: false
+      requiresAdmin: true
     }
   ];
 
