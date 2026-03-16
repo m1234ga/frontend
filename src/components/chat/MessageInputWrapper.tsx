@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import MessageInput from './MessageInput';
 import { ChatMessage, Chat as ChatModel } from '../../../../Shared/Models';
 import { useSocket } from '@/contexts/SocketContext';
+import { toast } from 'react-hot-toast';
 
 const normalizeOutgoingPhone = (chatId: string, phone?: string): string => {
     const rawChatId = (chatId || '').trim();
@@ -19,7 +20,45 @@ const normalizeOutgoingPhone = (chatId: string, phone?: string): string => {
 import RecordingControls from './RecordingControls';
 import { FilePreviewModal } from './modals/FilePreviewModal';
 import { TemplateManagerModal } from './modals/TemplateManagerModal';
+import { type MessageTemplate } from './modals/TemplateSelectionModal';
 import { useChatApi } from '@/hooks/useChatData';
+
+interface ChatTagOption {
+    id: string;
+    name: string;
+}
+
+interface AssignableUserOption {
+    id: string;
+    username: string;
+    firstName?: string;
+    lastName?: string;
+}
+
+const normalizeTemplateShortcut = (value: string): string =>
+    value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+const isTemplateSlashCommand = (value: string): boolean =>
+    /^\/(?:template|templates|tpl)(?:\s|$)|^\/t(?:\s|$)/i.test(value.trim());
+
+const readBlobAsBase64 = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const result = typeof reader.result === 'string' ? reader.result.split(',')[1] : '';
+            if (!result) {
+                reject(new Error('Failed to read template media'));
+                return;
+            }
+            resolve(result);
+        };
+        reader.onerror = () => reject(reader.error || new Error('Failed to read template media'));
+        reader.readAsDataURL(blob);
+    });
 
 interface MessageInputWrapperProps {
     onSend: (content: string) => void;
@@ -28,6 +67,9 @@ interface MessageInputWrapperProps {
     disabled?: boolean;
     selectedConversation: ChatModel;
     onOpenTemplates?: () => void;
+    onAssignChat?: (query?: string) => Promise<boolean> | boolean;
+    onCloseChat?: (reason?: string) => Promise<boolean> | boolean;
+    onTagChat?: (tagName?: string) => Promise<boolean> | boolean;
 }
 
 export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
@@ -36,11 +78,18 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
     onCancelReply,
     disabled,
     selectedConversation,
-    onOpenTemplates
+    onOpenTemplates,
+    onAssignChat,
+    onCloseChat,
+    onTagChat
 }) => {
     const chatRouter = useChatApi();
     const [newMessage, setNewMessage] = useState('');
     const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+    const [tags, setTags] = useState<ChatTagOption[]>([]);
+    const [assignableUsers, setAssignableUsers] = useState<AssignableUserOption[]>([]);
+    const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
     const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'paused' | 'reviewing'>('idle');
     const [recordingDuration, setRecordingDuration] = useState(0);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -116,14 +165,233 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
 
     const { socket, emitTyping } = useSocket();
 
+    const ensureTemplatesLoaded = useCallback(async () => {
+        if (templates.length > 0) {
+            return templates;
+        }
+
+        setIsLoadingTemplates(true);
+        try {
+            const data = await chatRouter.GetMessageTemplates();
+            const nextTemplates = Array.isArray(data) ? data as MessageTemplate[] : [];
+            setTemplates(nextTemplates);
+            return nextTemplates;
+        } catch (error) {
+            console.error('Error fetching templates:', error);
+            setTemplates([]);
+            toast.error('Failed to load templates');
+            return [] as MessageTemplate[];
+        } finally {
+            setIsLoadingTemplates(false);
+        }
+    }, [chatRouter, templates]);
+
+    const ensureTagsLoaded = useCallback(async () => {
+        if (tags.length > 0) {
+            return tags;
+        }
+
+        try {
+            const data = await chatRouter.GetTags();
+            const nextTags = Array.isArray(data)
+                ? data.map((tag: unknown) => {
+                    const item = tag as { tagId?: string; id?: string; tagName?: string; name?: string };
+                    return {
+                        id: String(item.tagId || item.id || ''),
+                        name: String(item.tagName || item.name || ''),
+                    };
+                }).filter((tag) => tag.id && tag.name)
+                : [];
+            setTags(nextTags);
+            return nextTags;
+        } catch (error) {
+            console.error('Error fetching tags:', error);
+            return [] as ChatTagOption[];
+        }
+    }, [chatRouter, tags]);
+
+    const ensureUsersLoaded = useCallback(async () => {
+        if (assignableUsers.length > 0) {
+            return assignableUsers;
+        }
+
+        try {
+            const data = await chatRouter.GetUsers();
+            const users = Array.isArray(data) ? data as AssignableUserOption[] : [];
+            setAssignableUsers(users);
+            return users;
+        } catch (error) {
+            console.error('Error fetching assignable users:', error);
+            return [] as AssignableUserOption[];
+        }
+    }, [assignableUsers, chatRouter]);
+
+    const sendTemplate = useCallback(async (template: MessageTemplate) => {
+        if (!socket) {
+            toast.error('Unable to send template right now');
+            return;
+        }
+
+        const targetPhone = normalizeOutgoingPhone(selectedConversation.id, selectedConversation.phone);
+        const baseMessage = {
+            id: Date.now().toString(),
+            chatId: selectedConversation.id,
+            phone: targetPhone,
+            message: template.content,
+            messageType: 'text' as const,
+            isFromMe: true,
+            replyToMessageId: replyToMessage?.id,
+            timestamp: new Date().toISOString(),
+        };
+
+        try {
+            if (template.imageUrl) {
+                const response = await fetch(template.imageUrl);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch template image');
+                }
+
+                const imageData = await readBlobAsBase64(await response.blob());
+                socket.emit('send_image', {
+                    message: {
+                        ...baseMessage,
+                        messageType: 'image' as const,
+                    },
+                    imageData,
+                    filename: `template_${template.id}_${Date.now()}.jpg`,
+                });
+            } else {
+                if (template.mediaPath) {
+                    toast('Template media was not available, sent as text');
+                }
+                socket.emit('send_message', baseMessage);
+            }
+
+            if (replyToMessage) {
+                onCancelReply?.();
+            }
+            toast.success('Template sent');
+        } catch (error) {
+            console.error('Error sending template:', error);
+            toast.error('Failed to send template');
+            throw error;
+        }
+    }, [onCancelReply, replyToMessage, selectedConversation.id, selectedConversation.phone, socket]);
+
+    const templateShortcuts = useMemo(
+        () => templates
+            .map((template) => {
+                const command = normalizeTemplateShortcut(template.name);
+                return {
+                    key: `/template ${command}`,
+                    label: `Send template: ${template.name}`,
+                    insert: `/template ${command}`,
+                };
+            }),
+        [templates]
+    );
+
+    const tagShortcuts = useMemo(
+        () => tags.map((tag) => {
+            const normalizedTag = normalizeTemplateShortcut(tag.name);
+            return {
+                key: `/tag ${normalizedTag}`,
+                label: `Apply tag: ${tag.name}`,
+                insert: `/tag ${normalizedTag}`,
+            };
+        }),
+        [tags]
+    );
+
+    const slashShortcuts = useMemo(
+        () => {
+            const assignShortcuts = assignableUsers
+                .filter((user) => Boolean(user.username))
+                .map((user) => ({
+                    key: `/assign ${user.username.toLowerCase()}`,
+                    label: `Assign to: ${user.firstName || ''} ${user.lastName || ''}`.trim() || `Assign to: ${user.username}`,
+                    insert: `/assign ${user.username}`,
+                }));
+
+            return [...templateShortcuts, ...tagShortcuts, ...assignShortcuts];
+        },
+        [assignableUsers, tagShortcuts, templateShortcuts]
+    );
+
+    const resolveTemplateCommand = useCallback(async (input: string) => {
+        const trimmed = input.trim();
+        const lowered = trimmed.toLowerCase();
+
+        if (['/template', '/templates', '/tpl', '/t'].includes(lowered)) {
+            toast('Pick a template command from slash list, e.g. /template welcome');
+            return true;
+        }
+
+        const match = trimmed.match(/^\/(?:template|templates|tpl|t)\s+(.+)$/i);
+        if (!match) {
+            return false;
+        }
+
+        const shortcut = normalizeTemplateShortcut(match[1]);
+        const availableTemplates = await ensureTemplatesLoaded();
+        const template = availableTemplates.find((item) => normalizeTemplateShortcut(item.name) === shortcut);
+
+        if (!template) {
+            toast.error('Template shortcut not found');
+            return true;
+        }
+
+        await sendTemplate(template);
+        return true;
+    }, [ensureTemplatesLoaded, sendTemplate]);
+
+    useEffect(() => {
+        void ensureTemplatesLoaded();
+    }, [ensureTemplatesLoaded]);
+
+    useEffect(() => {
+        const trimmed = newMessage.trim().toLowerCase();
+        if (!trimmed.startsWith('/tag')) {
+            return;
+        }
+
+        void ensureTagsLoaded();
+    }, [ensureTagsLoaded, newMessage]);
+
+    useEffect(() => {
+        const trimmed = newMessage.trim().toLowerCase();
+        if (!trimmed.startsWith('/assign')) {
+            return;
+        }
+
+        void ensureUsersLoaded();
+    }, [ensureUsersLoaded, newMessage]);
+
+    useEffect(() => {
+        const trimmed = newMessage.trim().toLowerCase();
+        if (!isTemplateSlashCommand(trimmed)) {
+            return;
+        }
+
+        void ensureTemplatesLoaded();
+    }, [ensureTemplatesLoaded, newMessage]);
+
     const handleSend = () => {
         const trimmed = newMessage.trim();
         if (!trimmed || disabled) return;
 
-        if (trimmed.startsWith('/template')) {
-            onOpenTemplates?.();
-            setNewMessage('');
-            emitTyping(selectedConversation.id, false);
+        if (isTemplateSlashCommand(trimmed)) {
+            void resolveTemplateCommand(trimmed)
+                .then((handled) => {
+                    if (!handled) {
+                        return;
+                    }
+                    setNewMessage('');
+                    emitTyping(selectedConversation.id, false);
+                })
+                .catch(() => {
+                    emitTyping(selectedConversation.id, false);
+                });
             return;
         }
 
@@ -131,6 +399,125 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
             onSend(`📝 ${trimmed.replace('/note', '').trim()}`);
             setNewMessage('');
             emitTyping(selectedConversation.id, false);
+            return;
+        }
+
+        if (trimmed.startsWith('/close')) {
+            const reason = trimmed.replace(/^\/close\s*/i, '').replace(/^reason:\s*/i, '').trim();
+            void Promise.resolve(onCloseChat?.(reason)).then((handled) => {
+                if (!handled) {
+                    return;
+                }
+                setNewMessage('');
+                emitTyping(selectedConversation.id, false);
+            });
+            return;
+        }
+
+        if (trimmed.startsWith('/assign')) {
+            const assignee = trimmed.replace(/^\/assign\s*/i, '').replace(/^@/, '').trim();
+            void Promise.resolve(onAssignChat?.(assignee)).then((handled) => {
+                if (!handled) {
+                    return;
+                }
+                setNewMessage('');
+                emitTyping(selectedConversation.id, false);
+            });
+            return;
+        }
+
+        if (trimmed.startsWith('/tag')) {
+            const tagName = trimmed.replace(/^\/tag\s*/i, '').replace(/^#/, '').trim();
+            void Promise.resolve(onTagChat?.(tagName)).then((handled) => {
+                if (!handled) {
+                    return;
+                }
+                setNewMessage('');
+                emitTyping(selectedConversation.id, false);
+            });
+            return;
+        }
+
+        if (trimmed.startsWith('/location')) {
+            const match = trimmed.match(/^\/location\s+(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s+(.+))?$/i);
+            if (!match || !socket) {
+                toast.error('Usage: /location <lat>,<lng> [name]');
+                return;
+            }
+
+            const latitude = Number(match[1]);
+            const longitude = Number(match[2]);
+            const name = (match[3] || '').trim();
+            const targetPhone = normalizeOutgoingPhone(selectedConversation.id, selectedConversation.phone);
+
+            socket.emit('send_location', {
+                chatId: selectedConversation.id,
+                phone: targetPhone,
+                latitude,
+                longitude,
+                name,
+                messageText: name ? `[Location] ${name}` : '',
+                replyToId: replyToMessage?.id,
+            });
+
+            setNewMessage('');
+            emitTyping(selectedConversation.id, false);
+            if (replyToMessage) onCancelReply?.();
+            return;
+        }
+
+        if (trimmed.startsWith('/contact')) {
+            const payload = trimmed.replace(/^\/contact\s*/i, '').trim();
+            const [rawName, rawPhone] = payload.split('|').map((value) => (value || '').trim());
+            if (!rawName || !rawPhone || !socket) {
+                toast.error('Usage: /contact <name>|<phone>');
+                return;
+            }
+
+            const targetPhone = normalizeOutgoingPhone(selectedConversation.id, selectedConversation.phone);
+            const safeName = rawName.replace(/\n/g, ' ').trim();
+            const safePhone = rawPhone.replace(/\s+/g, ' ').trim();
+            const vcard = `BEGIN:VCARD\nVERSION:3.0\nN:${safeName};;;;\nFN:${safeName}\nTEL;type=CELL:${safePhone}\nEND:VCARD`;
+
+            socket.emit('send_contact', {
+                chatId: selectedConversation.id,
+                phone: targetPhone,
+                contactName: safeName,
+                vcard,
+                messageText: `[Contact] ${safeName}`,
+                replyToId: replyToMessage?.id,
+            });
+
+            setNewMessage('');
+            emitTyping(selectedConversation.id, false);
+            if (replyToMessage) onCancelReply?.();
+            return;
+        }
+
+        if (trimmed.startsWith('/poll')) {
+            const payload = trimmed.replace(/^\/poll\s*/i, '').trim();
+            const segments = payload.split('|').map((value) => value.trim()).filter(Boolean);
+            if (segments.length < 3 || !socket) {
+                toast.error('Usage: /poll <question>|<option1>|<option2>[|option3...]');
+                return;
+            }
+
+            const [pollName, ...options] = segments;
+            const targetPhone = normalizeOutgoingPhone(selectedConversation.id, selectedConversation.phone);
+
+            socket.emit('send_poll', {
+                chatId: selectedConversation.id,
+                phone: targetPhone,
+                pollName,
+                options,
+                selectableCount: 1,
+                messageText: `[Poll] ${pollName}`,
+                replyToId: replyToMessage?.id,
+            });
+
+            setNewMessage('');
+            emitTyping(selectedConversation.id, false);
+            if (replyToMessage) onCancelReply?.();
             return;
         }
 
@@ -488,9 +875,10 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
                     onStopRecording={handleStopRecording}
                     isRecording={false} // We handle recording UI separately now
                     onOpenTemplates={() => {
-                        setShowTemplateModal(true);
+                        setNewMessage('/template ');
                         onOpenTemplates?.();
                     }}
+                    templateShortcuts={slashShortcuts}
                 />
             )}
         </div>

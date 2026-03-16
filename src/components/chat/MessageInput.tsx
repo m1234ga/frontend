@@ -16,15 +16,32 @@ interface MessageInputProps {
   isRecording?: boolean;
   onToggleTempMessages?: () => void;
   onOpenTemplates?: () => void;
+  templateShortcuts?: Array<{
+    key: string;
+    label: string;
+    insert: string;
+  }>;
 }
 
 const QUICK_EMOJIS = ['😀', '👍', '🔥', '🎉', '🙏', '✅', '👀', '💡'];
-const SLASH_COMMANDS = [
+
+const normalizeSlashLookup = (value: string): string =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9/]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/-\//g, '/');
+
+const BASE_SLASH_COMMANDS = [
   { key: '/assign', label: 'Assign chat', insert: '/assign @' },
-  { key: '/close', label: 'Close conversation', insert: '/close reason:' },
+  { key: '/close', label: 'Close conversation', insert: '/close ' },
   { key: '/note', label: 'Internal note', insert: '/note ' },
-  { key: '/tag', label: 'Tag conversation', insert: '/tag #' },
-  { key: '/template', label: 'Insert template', insert: '/template ' }
+  { key: '/tag', label: 'Tag conversation', insert: '/tag ' },
+  { key: '/location', label: 'Send location', insert: '/location 30.0444,31.2357 Cairo' },
+  { key: '/contact', label: 'Send contact', insert: '/contact John Doe|+201234567890' },
+  { key: '/poll', label: 'Send poll', insert: '/poll Lunch?|Pizza|Burger|Salad' },
+  { key: '/templates', label: 'Send template by name', insert: '/template ' }
 ];
 
 const MessageInput: React.FC<MessageInputProps> = ({
@@ -38,7 +55,8 @@ const MessageInput: React.FC<MessageInputProps> = ({
   onStartRecording,
   onStopRecording,
   isRecording,
-  onOpenTemplates
+  onOpenTemplates,
+  templateShortcuts = []
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -46,11 +64,21 @@ const MessageInput: React.FC<MessageInputProps> = ({
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const slashCommands = useMemo(
+    () => [...BASE_SLASH_COMMANDS, ...templateShortcuts],
+    [templateShortcuts]
+  );
+
   const slashMatches = useMemo(() => {
-    const normalized = (newMessage || '').trim().toLowerCase();
-    if (!normalized.startsWith('/')) return SLASH_COMMANDS;
-    return SLASH_COMMANDS.filter((command) => command.key.startsWith(normalized));
-  }, [newMessage]);
+    const rawQuery = (newMessage || '').trim().toLowerCase();
+    if (!rawQuery.startsWith('/')) return slashCommands;
+
+    const normalizedQuery = normalizeSlashLookup(rawQuery);
+    return slashCommands.filter((command) =>
+      command.key.startsWith(rawQuery) ||
+      normalizeSlashLookup(command.key).startsWith(normalizedQuery)
+    );
+  }, [newMessage, slashCommands]);
 
   useEffect(() => {
     if (newMessage.trim().startsWith('/')) {
@@ -92,6 +120,10 @@ const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const trimmedInput = newMessage.trim();
+    const commandToken = trimmedInput.split(/\s+/, 1)[0] || '';
+    const hasSlashArgument = trimmedInput.startsWith('/') && trimmedInput.length > commandToken.length;
+
     if (showSlashMenu && slashMatches.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -101,6 +133,11 @@ const MessageInput: React.FC<MessageInputProps> = ({
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         setActiveSlashIndex((prev) => Math.max(prev - 1, 0));
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey && !hasSlashArgument) {
+        e.preventDefault();
+        applySlashCommand(slashMatches[activeSlashIndex]?.insert || '/');
         return;
       }
       if (e.key === 'Tab') {
@@ -252,7 +289,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
         )}
 
         <div className="mt-2 px-1 text-[11px] text-[var(--chat-muted)]">
-          <span className="inline-flex items-center gap-1">Tip: use <kbd className="rounded border border-[var(--chat-border)] px-1.5 py-0.5">/template</kbd> for canned replies.</span>
+          <span className="inline-flex items-center gap-1">Tip: use <kbd className="rounded border border-[var(--chat-border)] px-1.5 py-0.5">/template your-template</kbd>.</span>
         </div>
       </div>
     </div>

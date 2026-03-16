@@ -18,6 +18,11 @@ type WuzUserOption = {
   connected?: number | boolean;
 };
 
+type GroupOption = {
+  jid: string;
+  name: string;
+};
+
 const AVAILABLE_EVENTS = ['Message', 'ReadReceipt', 'HistorySync', 'ChatPresence'];
 
 export default function SettingsPage() {
@@ -36,6 +41,19 @@ export default function SettingsPage() {
   const [hasHmacConfigured, setHasHmacConfigured] = useState(false);
   const [wuzUsers, setWuzUsers] = useState<WuzUserOption[]>([]);
   const [mappedWuzUserId, setMappedWuzUserId] = useState<string>('');
+  const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [selectedGroupJid, setSelectedGroupJid] = useState('');
+  const [groupName, setGroupName] = useState('');
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupParticipants, setNewGroupParticipants] = useState('');
+  const [groupPhotoBase64, setGroupPhotoBase64] = useState('');
+  const [groupLocked, setGroupLocked] = useState(false);
+  const [groupEphemeral, setGroupEphemeral] = useState<'24h' | '7d' | '90d' | 'off'>('off');
+  const [groupInviteLink, setGroupInviteLink] = useState('');
+  const [groupInfoPreview, setGroupInfoPreview] = useState('');
+  const [groupParticipantsToSet, setGroupParticipantsToSet] = useState('');
+  const [groupParticipantOperation, setGroupParticipantOperation] = useState<'set' | 'add' | 'remove'>('set');
+  const [groupActionMessage, setGroupActionMessage] = useState('');
 
   const apiBase = useMemo(() => {
     return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
@@ -55,7 +73,8 @@ export default function SettingsPage() {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch status: ${response.status}`);
+      setStatus({});
+      return;
     }
 
     const data = await response.json();
@@ -138,6 +157,34 @@ export default function SettingsPage() {
     setMappedWuzUserId(String(data?.mappedWuzUserId || ''));
   }, [apiBase, authHeaders]);
 
+  const fetchGroups = useCallback(async () => {
+    const response = await fetch(`${apiBase}/api/chat/api/settings/groups/list`, {
+      method: 'GET',
+      headers: authHeaders,
+    });
+
+    if (!response.ok) {
+      setGroups([]);
+      return;
+    }
+
+    const data = await response.json();
+    const list: unknown[] = Array.isArray(data?.data?.Groups) ? data.data.Groups : Array.isArray(data?.Groups) ? data.Groups : [];
+    const normalized = list.map((item: unknown) => {
+      const entry = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+      return {
+        jid: String(entry.JID || entry.jid || ''),
+        name: String(entry.Name || entry.name || entry.JID || entry.jid || ''),
+      };
+    }).filter((group: GroupOption) => !!group.jid);
+
+    setGroups(normalized);
+    if (!selectedGroupJid && normalized.length > 0) {
+      setSelectedGroupJid(normalized[0].jid);
+      setGroupName(normalized[0].name);
+    }
+  }, [apiBase, authHeaders, selectedGroupJid]);
+
   const refreshAll = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -177,6 +224,77 @@ export default function SettingsPage() {
       setIsSubmitting(false);
     }
   };
+
+  const fetchGroupInfo = useCallback(async () => {
+    if (!selectedGroupJid) return;
+    const response = await fetch(`${apiBase}/api/chat/api/settings/groups/info?groupJid=${encodeURIComponent(selectedGroupJid)}`, {
+      method: 'GET',
+      headers: authHeaders,
+    });
+    if (!response.ok) {
+      setGroupInfoPreview('Failed to load group info');
+      return;
+    }
+    const data = await response.json();
+    setGroupInfoPreview(JSON.stringify(data?.data || data, null, 2));
+  }, [apiBase, authHeaders, selectedGroupJid]);
+
+  const fetchGroupInviteLink = useCallback(async () => {
+    if (!selectedGroupJid) return;
+    const response = await fetch(`${apiBase}/api/chat/api/settings/groups/invite-link?groupJid=${encodeURIComponent(selectedGroupJid)}`, {
+      method: 'GET',
+      headers: authHeaders,
+    });
+    if (!response.ok) {
+      setGroupInviteLink('Failed to fetch invite link');
+      return;
+    }
+    const data = await response.json();
+    const link = data?.data?.InviteLink || data?.InviteLink || '';
+    setGroupInviteLink(String(link));
+  }, [apiBase, authHeaders, selectedGroupJid]);
+
+  const parseParticipants = useCallback((raw: string): string[] => {
+    return raw
+      .split(/[\n,]+/)
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => value.replace(/\D/g, ''))
+      .filter(Boolean);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedGroupJid) return;
+    const selected = groups.find((group) => group.jid === selectedGroupJid);
+    if (selected) {
+      setGroupName(selected.name);
+    }
+  }, [selectedGroupJid, groups]);
+
+  const runGroupAction = useCallback(async (path: string, body?: unknown) => {
+    setIsSubmitting(true);
+    setGroupActionMessage('');
+    try {
+      const response = await fetch(`${apiBase}${path}`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const details = String(data?.data?.Details || data?.Details || data?.message || 'Success');
+      setGroupActionMessage(details);
+      await refreshAll();
+    } catch (error) {
+      setGroupActionMessage(error instanceof Error ? error.message : 'Group action failed');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [apiBase, authHeaders, refreshAll]);
 
   const toggleSubscribe = (eventName: string) => {
     setSubscribe((prev) => {

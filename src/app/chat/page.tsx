@@ -5,7 +5,7 @@ import { ChatSidebarOptimized } from '@/components/chat/ChatSidebarOptimized';
 import { ChatAreaOptimized } from '@/components/chat/ChatAreaOptimized';
 import { useSocket } from '@/contexts/SocketContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useConversationStore } from '@/store/conversationStore';
 import { useChatApi } from '@/hooks/useChatData';
 import { Chat as ChatModel, ChatMessage, MessageReaction } from '../../../../Shared/Models';
@@ -147,11 +147,14 @@ export default function ChatPage() {
   } = useSocket();
   const { authenticated, loading, logout, user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const chatApi = useChatApi();
 
   const conversations = useConversationStore((state) => state.conversations);
   const updateConversation = useConversationStore((state) => state.updateConversation);
   const getConversation = useConversationStore((state) => state.getConversation);
+  const addConversation = useConversationStore((state) => state.addConversation);
+  const launchHandledRef = useRef<string>('');
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -307,16 +310,17 @@ export default function ChatPage() {
     }
   }, [socket, handleMessageSent, handleMessageError]);
 
-  const handleSendMessage = useCallback(async (content: string, replyMessage?: ChatMessage) => {
-    if (!selectedConversation) return;
-    const targetPhone = normalizeOutgoingPhone(selectedConversation.id, selectedConversation.phone);
+  const handleSendMessage = useCallback(async (content: string, replyMessage?: ChatMessage, targetConversation?: ChatModel) => {
+    const conversation = targetConversation || selectedConversation;
+    if (!conversation) return;
+    const targetPhone = normalizeOutgoingPhone(conversation.id, conversation.phone);
 
     const newMessage: ChatMessage = {
       id: Date.now().toString(),
-      chatId: selectedConversation.id,
+      chatId: conversation.id,
       message: content,
       timeStamp: new Date(),
-      ContactId: selectedConversation.contactId,
+      ContactId: conversation.contactId,
       messageType: 'text',
       isEdit: false,
       isRead: false,
@@ -324,14 +328,14 @@ export default function ChatPage() {
       status: 'sent',
       isFromMe: true,
       phone: targetPhone,
-      pushName: selectedConversation.name,
+      pushName: conversation.name,
       replyToMessage: replyMessage,
       replyToMessageId: replyMessage?.id
     };
 
     const messageWithStatus = { ...newMessage, message: `${newMessage.message} (Sending...)` };
     setMessages(prev => normalizeMessages([...prev, messageWithStatus]));
-    updateConversation(selectedConversation.id, { lastMessage: content, lastMessageTime: new Date() });
+    updateConversation(conversation.id, { lastMessage: content, lastMessageTime: new Date() });
 
     try {
       sendMessage(newMessage);
@@ -345,6 +349,54 @@ export default function ChatPage() {
       ));
     }
   }, [selectedConversation, sendMessage, updateConversation]);
+
+  useEffect(() => {
+    const rawContact = String(searchParams.get('contact') || '').trim();
+    const launchMessage = String(searchParams.get('message') || '').trim();
+    const contact = rawContact.replace(/\D/g, '');
+    if (!contact || !authenticated || loading) return;
+
+    const launchKey = `${contact}|${launchMessage}`;
+    if (launchHandledRef.current === launchKey) return;
+    launchHandledRef.current = launchKey;
+
+    const existing = conversations.find((conversation) => {
+      const normalizedId = String(conversation.id || '').replace(/\D/g, '');
+      const normalizedPhone = String(conversation.phone || '').replace(/@[^@]+$/, '').replace(/\D/g, '');
+      const normalizedContactId = String(conversation.contactId || '').replace(/\D/g, '');
+      return normalizedId === contact || normalizedPhone === contact || normalizedContactId === contact;
+    });
+
+    const targetConversation: ChatModel = existing || {
+      id: contact,
+      name: contact,
+      phone: contact,
+      contactId: contact,
+      lastMessage: '',
+      lastMessageTime: new Date(),
+      unreadCount: 0,
+      isOnline: false,
+      isTyping: false,
+      messages: [],
+      participants: [],
+      tags: [],
+      status: 'open'
+    };
+
+    if (!existing) {
+      addConversation(targetConversation);
+    }
+
+    void (async () => {
+      await handleSelectConversation(targetConversation);
+
+      if (launchMessage) {
+        await handleSendMessage(launchMessage, undefined, targetConversation);
+      }
+
+      router.replace('/chat');
+    })();
+  }, [searchParams, authenticated, loading, conversations, addConversation, handleSelectConversation, handleSendMessage, router]);
 
   const handleNewMessage = useCallback((message: IncomingMessage) => {
     if (!selectedConversation || message.chatId !== selectedConversation.id) {

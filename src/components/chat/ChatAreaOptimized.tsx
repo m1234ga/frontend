@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { EmptyArea } from '@/components/chat/EmptyArea';
 import { toast } from 'react-hot-toast';
 import VirtualizedMessageList from './VirtualizedMessageList';
-import { ChatMessage, Chat as ChatModel } from '../../../../Shared/Models';
+import { ChatMessage, Chat as ChatModel, ChatTag } from '../../../../Shared/Models';
 import { ForwardModal } from '@/components/chat/ForwardModal';
 import { ReactionPicker } from '@/components/chat/ReactionPicker';
 import { useSocket } from '@/contexts/SocketContext';
@@ -14,8 +14,47 @@ import ChatHeader from './ChatHeader';
 import { MessageInputWrapper } from './MessageInputWrapper';
 import { ThreadPane } from './ThreadPane';
 import { SecondarySidebar } from './SecondarySidebar';
+import { GroupDetailsPane } from './GroupDetailsPane';
 import { AssignChatModal } from './modals/AssignChatModal';
 import { CloseChatModal } from './modals/CloseChatModal';
+
+type GroupParticipantOption = {
+    id: string;
+    name: string;
+};
+
+const isGroupConversation = (conversation: ChatModel | null): boolean => {
+    if (!conversation) return false;
+    const phone = String(conversation.phone || '').trim();
+    const contactId = String(conversation.contactId || '').trim();
+    return phone.endsWith('@g.us') || contactId.endsWith('@g.us') || phone.includes('-') || contactId.includes('-');
+};
+
+const resolveGroupJid = (conversation: ChatModel | null): string => {
+    if (!conversation) return '';
+    const phone = String(conversation.phone || '').trim();
+    const contactId = String(conversation.contactId || '').trim();
+    if (phone.endsWith('@g.us')) return phone;
+    if (contactId.endsWith('@g.us')) return contactId;
+    return phone || contactId;
+};
+
+const normalizeParticipants = (payload: any): GroupParticipantOption[] => {
+    const info = payload?.data || payload || {};
+    const source = Array.isArray(info?.Participants)
+        ? info.Participants
+        : Array.isArray(info?.participants)
+            ? info.participants
+            : [];
+
+    return source
+        .map((item: any) => {
+            const id = String(item?.JID || item?.jid || item?.ID || item?.id || item?.Phone || item?.phone || item || '').trim();
+            const name = String(item?.Name || item?.name || item?.PushName || item?.pushName || id).trim();
+            return { id, name };
+        })
+        .filter((participant: GroupParticipantOption) => !!participant.id);
+};
 
 interface ChatAreaProps {
     selectedConversation: ChatModel | null;
@@ -70,6 +109,12 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
     const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; username: string; firstName?: string; lastName?: string }>>([]);
     const [closeReasonTags, setCloseReasonTags] = useState<Array<{ id: string; name: string }>>([]);
     const [isAssignLoading, setIsAssignLoading] = useState(false);
+    const [groupPaneState, setGroupPaneState] = useState({
+        isOpen: false,
+        isLoading: false,
+        error: '',
+        participants: [] as GroupParticipantOption[],
+    });
 
     // Refs
     const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -125,6 +170,8 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
         return pinnedMessages[pinnedMessages.length - 1];
     }, [pinnedMessages]);
 
+    const isCurrentGroupChat = useMemo(() => isGroupConversation(selectedConversation), [selectedConversation]);
+
     // Optimized callbacks
     const handleSendMessageInternal = useCallback((content: string) => {
         if (messageState.replyToMessage) {
@@ -151,7 +198,8 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
 
     const handleOpenThread = useCallback((message: ChatMessage) => {
         setMessageState(prev => ({ ...prev, threadRootMessage: message }));
-        setUiState(prev => ({ ...prev, showThreadPane: true }));
+        setUiState(prev => ({ ...prev, showThreadPane: true, showSecondarySidebar: false }));
+        setGroupPaneState(prev => ({ ...prev, isOpen: false }));
     }, []);
 
     const handleCloseThread = useCallback(() => {
@@ -331,6 +379,124 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
         }
     }, [selectedConversation, chatRouter]);
 
+    const handleAssignChatFromSlash = useCallback(async (query?: string) => {
+        debugger;
+        if (!selectedConversation) return false;
+
+        const normalizedQuery = (query || '').trim().replace(/^@+/, '').toLowerCase();
+        if (!normalizedQuery) {
+            setUiState(prev => ({ ...prev, showAssignModal: true }));
+            return true;
+        }
+
+        try {
+            const loadedUsers = availableUsers.length > 0
+                ? availableUsers
+                : await chatRouter.GetUsers().then((users) => Array.isArray(users) ? users : []);
+
+            if (availableUsers.length === 0) {
+                setAvailableUsers(loadedUsers);
+            }
+
+            const exactMatches = loadedUsers.filter((candidate) => {
+                const username = (candidate.username || '').toLowerCase();
+                const fullName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim().toLowerCase();
+                return username === normalizedQuery || fullName === normalizedQuery || candidate.id.toLowerCase() === normalizedQuery;
+            });
+
+            const matchedUser = exactMatches[0] || loadedUsers.find((candidate) => {
+                const username = (candidate.username || '').toLowerCase();
+                const fullName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim().toLowerCase();
+                return username.startsWith(normalizedQuery) || fullName.includes(normalizedQuery);
+            });
+
+            if (!matchedUser) {
+                toast.error('Assignee not found');
+                setUiState(prev => ({ ...prev, showAssignModal: true }));
+                return true;
+            }
+
+            await handleAssignChat(matchedUser.id);
+            return true;
+        } catch (error) {
+            console.error('Error assigning chat from slash command:', error);
+            toast.error('Failed to assign chat');
+            return true;
+        }
+    }, [availableUsers, chatRouter, handleAssignChat, selectedConversation]);
+
+    const handleCloseChatFromSlash = useCallback(async (reason?: string) => {
+        if (!selectedConversation) return false;
+
+        const normalizedReason = (reason || '').trim();
+        if (!normalizedReason) {
+            setUiState(prev => ({ ...prev, showCloseModal: true }));
+            return true;
+        }
+
+        await handleCloseChat(normalizedReason);
+        return true;
+    }, [handleCloseChat, selectedConversation]);
+
+    const handleTagChatFromSlash = useCallback(async (tagName?: string) => {
+        if (!selectedConversation || !user?.id) return false;
+
+        const rawTagQuery = (tagName || '').trim().replace(/^#/, '');
+        const normalizedTag = rawTagQuery.toLowerCase();
+        const normalizedTagToken = normalizedTag
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+        if (!normalizedTagToken) {
+            toast.error('Enter a tag name after /tag');
+            return true;
+        }
+
+        try {
+            const tags = await chatRouter.GetTags();
+            const availableTags = Array.isArray(tags) ? tags : [];
+
+            const toToken = (value: string) =>
+                value
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+
+            const exactMatch = availableTags.find((tag) => {
+                const name = String((tag as ChatTag).tagName || (tag as { name?: string }).name || '');
+                const id = String((tag as ChatTag).tagId || (tag as { id?: string }).id || '');
+                const nameLower = name.toLowerCase();
+                const idLower = id.toLowerCase();
+                return (
+                    nameLower === normalizedTag ||
+                    idLower === normalizedTag ||
+                    toToken(name) === normalizedTagToken ||
+                    toToken(id) === normalizedTagToken
+                );
+            });
+
+            const matchedTag = exactMatch || availableTags.find((tag) => {
+                const name = String((tag as ChatTag).tagName || (tag as { name?: string }).name || '');
+                return toToken(name).startsWith(normalizedTagToken);
+            });
+
+            if (!matchedTag) {
+                toast.error('Tag not found');
+                return true;
+            }
+
+            const matchedTagId = String((matchedTag as ChatTag).tagId || (matchedTag as { id?: string }).id || '');
+            await chatRouter.AssignTagToChat(selectedConversation.id, matchedTagId, user.id);
+            toast.success(`Tag assigned: ${String((matchedTag as ChatTag).tagName || (matchedTag as { name?: string }).name || normalizedTag)}`);
+            return true;
+        } catch (error) {
+            console.error('Error assigning tag from slash command:', error);
+            toast.error('Failed to assign tag');
+            return true;
+        }
+    }, [chatRouter, selectedConversation, user?.id]);
+
     const handleSecondaryItemClick = useCallback((item: { id?: string }) => {
         setUiState(prev => ({ ...prev, showSecondarySidebar: false }));
 
@@ -343,6 +509,38 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
             node?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 120);
     }, []);
+
+    const loadParticipants = useCallback(async (groupJid: string) => {
+        if (!groupJid) return;
+        setGroupPaneState(prev => ({ ...prev, isLoading: true, error: '' }));
+        try {
+            const payload = await chatRouter.GetGroupInfo(groupJid);
+            const participants = normalizeParticipants(payload);
+            setGroupPaneState(prev => ({ ...prev, isLoading: false, participants }));
+        } catch (error) {
+            console.error('Error loading group participants:', error);
+            setGroupPaneState(prev => ({ ...prev, isLoading: false, error: 'Failed to load participants', participants: [] }));
+        }
+    }, [chatRouter]);
+
+    const openGroupPane = useCallback(() => {
+        if (!isCurrentGroupChat) return;
+        const groupJid = resolveGroupJid(selectedConversation);
+        if (!groupJid) return;
+        setUiState(prev => ({ ...prev, showSecondarySidebar: false, showThreadPane: false }));
+        setGroupPaneState(prev => ({ ...prev, isOpen: true, participants: [], error: '' }));
+        void loadParticipants(groupJid);
+    }, [isCurrentGroupChat, selectedConversation, loadParticipants]);
+
+    const closeGroupPane = useCallback(() => {
+        setGroupPaneState(prev => ({ ...prev, isOpen: false }));
+    }, []);
+
+    useEffect(() => {
+        if (!selectedConversation || !isGroupConversation(selectedConversation)) {
+            setGroupPaneState(prev => ({ ...prev, isOpen: false }));
+        }
+    }, [selectedConversation]);
 
     if (!selectedConversation) {
         return <EmptyArea conversations={conversations} currentUser={user} />;
@@ -358,18 +556,28 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
                 onAssignClick={() => setUiState(prev => ({ ...prev, showAssignModal: true }))}
                 onStatusClick={handleStatusClick}
                 favoriteCount={favoriteMessages.length}
-                onFavoritesClick={() => setUiState(prev => ({
-                    ...prev,
-                    secondarySidebarType: 'favorites',
-                    showSecondarySidebar: true
-                }))}
+                onFavoritesClick={() => {
+                    setGroupPaneState(prev => ({ ...prev, isOpen: false }));
+                    setUiState(prev => ({
+                        ...prev,
+                        showThreadPane: false,
+                        secondarySidebarType: 'favorites',
+                        showSecondarySidebar: true
+                    }));
+                }}
                 pinnedCount={pinnedMessages.length}
                 pinnedPreview={latestPinnedMessage?.message || undefined}
-                onPinnedClick={() => setUiState(prev => ({
-                    ...prev,
-                    secondarySidebarType: 'pinned',
-                    showSecondarySidebar: true
-                }))}
+                onPinnedClick={() => {
+                    setGroupPaneState(prev => ({ ...prev, isOpen: false }));
+                    setUiState(prev => ({
+                        ...prev,
+                        showThreadPane: false,
+                        secondarySidebarType: 'pinned',
+                        showSecondarySidebar: true
+                    }));
+                }}
+                isGroupChat={isCurrentGroupChat}
+                onGroupInfoClick={openGroupPane}
                 onClose={onClose}
             />
 
@@ -434,6 +642,17 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
                     />
                 )}
 
+                {groupPaneState.isOpen && isCurrentGroupChat && (
+                    <GroupDetailsPane
+                        isOpen={groupPaneState.isOpen}
+                        onClose={closeGroupPane}
+                        onRefresh={() => void loadParticipants(resolveGroupJid(selectedConversation))}
+                        participants={groupPaneState.participants}
+                        isLoading={groupPaneState.isLoading}
+                        error={groupPaneState.error}
+                    />
+                )}
+
                 <SecondarySidebar
                     isOpen={uiState.showSecondarySidebar}
                     onClose={() => setUiState(prev => ({ ...prev, showSecondarySidebar: false }))}
@@ -450,6 +669,9 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
                 onCancelReply={() => setMessageState(prev => ({ ...prev, replyToMessage: null }))}
                 disabled={chatStatus === 'closed'}
                 selectedConversation={selectedConversation}
+                onAssignChat={handleAssignChatFromSlash}
+                onCloseChat={handleCloseChatFromSlash}
+                onTagChat={handleTagChatFromSlash}
             />
 
             {/* Modals */}

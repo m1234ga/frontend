@@ -45,6 +45,21 @@ const getAttachmentLabel = (message: ChatMessage) => {
   return message.mediaPath?.split('/').pop() || 'Attached File';
 };
 
+type ParsedContactDetails = {
+  name: string;
+  phone: string;
+};
+
+const parseContactDetails = (message: ChatMessage): ParsedContactDetails | null => {
+  const payload = String(message.message || '').replace(/^\[Contact\]\s*/i, '').trim();
+  if (!payload) return null;
+
+  const [rawName, rawPhone] = payload.split('|').map((value) => String(value || '').trim());
+  const phone = (rawPhone || '').replace(/[^\d+]/g, '');
+  const name = rawName || 'Contact';
+  return { name, phone };
+};
+
 const buildReactionGroups = (message: ChatMessage, currentUserId?: string | null) => {
   if (!message.reactions?.length) return [] as Array<[string, string[]]>;
 
@@ -202,6 +217,145 @@ const DocumentMessageContent = ({
   </div>
 );
 
+const LocationMessageContent = ({
+  message,
+  isOwnMessage
+}: {
+  message: ChatMessage;
+  isOwnMessage: boolean;
+}) => {
+  // Parse location from message format: "[Location] lat,lng (name)".
+  const locationMatch = message.message?.match(/(?:\[Location\]\s*)?(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?:\s*\((.*?)\))?/i);
+  const latitude = locationMatch ? Number(locationMatch[1]) : NaN;
+  const longitude = locationMatch ? Number(locationMatch[2]) : NaN;
+  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+  const name = locationMatch ? (locationMatch[3] || 'Location') : 'Location';
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[240px]">
+      <div
+        onClick={() => {
+          if (hasCoordinates) {
+            window.open(`https://www.google.com/maps/search/${latitude},${longitude}`, '_blank');
+          }
+        }}
+        className={`flex items-center space-x-3 p-3 rounded-2xl transition-all duration-200 border ${hasCoordinates ? 'cursor-pointer' : 'cursor-default'}
+          ${isOwnMessage
+            ? 'bg-white/10 hover:bg-white/20 border-white/20'
+            : 'bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 border-gray-100 dark:border-slate-600'
+          }`}
+      >
+        <div className={`p-3 rounded-xl ${isOwnMessage ? 'bg-white/20' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
+          <svg className={`w-6 h-6 ${isOwnMessage ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold truncate ${isOwnMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
+            {name}
+          </p>
+          <p className={`text-[11px] ${isOwnMessage ? 'text-white/60' : 'text-gray-500 dark:text-gray-400'}`}>
+            {hasCoordinates ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : 'Location details unavailable'}
+          </p>
+          <p className={`text-[10px] ${isOwnMessage ? 'text-white/50' : 'text-gray-400 dark:text-gray-500'}`}>
+            {hasCoordinates ? 'Tap to open in Google Maps' : 'Coordinates unavailable'}
+          </p>
+        </div>
+      </div>
+      <TimeStatus message={message} isOwnMessage={isOwnMessage} />
+    </div>
+  );
+};
+
+const ContactMessageContent = ({
+  message,
+  isOwnMessage,
+  onOpenDetails
+}: {
+  message: ChatMessage;
+  isOwnMessage: boolean;
+  onOpenDetails: (message: ChatMessage) => void;
+}) => {
+  // Parse contact from message format: "[Contact] Name|+phone".
+  const contactPayload = message.message?.replace(/^\[Contact\]\s*/i, '').trim() || '';
+  const [rawName, rawPhone] = contactPayload.split('|').map((value) => value.trim());
+  const contactName = rawName || 'Contact';
+  const contactPhone = (rawPhone || '').replace(/[\s-]/g, '');
+  const canOpen = contactPhone.length > 0;
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[240px]">
+      <div
+        onClick={() => {
+          onOpenDetails(message);
+        }}
+        className={`flex items-center space-x-3 p-3 rounded-2xl transition-all duration-200 border cursor-pointer
+        ${isOwnMessage
+          ? 'bg-white/10 border-white/20'
+          : 'bg-gray-50 dark:bg-slate-700/50 border-gray-100 dark:border-slate-600'
+        }`}
+      >
+        <div className={`p-3 rounded-full ${isOwnMessage ? 'bg-white/20' : 'bg-purple-100 dark:bg-purple-900/30'}`}>
+          <svg className={`w-6 h-6 ${isOwnMessage ? 'text-white' : 'text-purple-600 dark:text-purple-400'}`} fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold truncate ${isOwnMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
+            {contactName}
+          </p>
+          <p className={`text-[11px] ${isOwnMessage ? 'text-white/60' : 'text-gray-500 dark:text-gray-400'}`}>
+            {contactPhone || 'Contact Information'}
+          </p>
+          <p className={`text-[10px] ${isOwnMessage ? 'text-white/50' : 'text-gray-400 dark:text-gray-500'}`}>
+            {canOpen ? 'Tap to view contact details' : 'Tap to view contact details'}
+          </p>
+        </div>
+      </div>
+      <TimeStatus message={message} isOwnMessage={isOwnMessage} />
+    </div>
+  );
+};
+
+const PollMessageContent = ({
+  message,
+  isOwnMessage
+}: {
+  message: ChatMessage;
+  isOwnMessage: boolean;
+}) => {
+  // Parse poll from message format: "[Poll] Question"
+  const pollName = message.message?.replace(/^\[Poll\]\s*/, '') || 'Poll';
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[240px]">
+      <div className={`p-3 rounded-2xl border
+        ${isOwnMessage
+          ? 'bg-white/10 border-white/20'
+          : 'bg-gray-50 dark:bg-slate-700/50 border-gray-100 dark:border-slate-600'
+        }`}
+      >
+        <div className="flex items-start space-x-3 mb-2">
+          <div className={`p-2 rounded-lg mt-0.5 ${isOwnMessage ? 'bg-white/20' : 'bg-orange-100 dark:bg-orange-900/30'}`}>
+            <svg className={`w-5 h-5 ${isOwnMessage ? 'text-white' : 'text-orange-600 dark:text-orange-400'}`} fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-semibold truncate ${isOwnMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'}`}>
+              {pollName}
+            </p>
+            <p className={`text-[11px] ${isOwnMessage ? 'text-white/60' : 'text-gray-500 dark:text-gray-400'}`}>
+              Poll • Vote on WhatsApp
+            </p>
+          </div>
+        </div>
+      </div>
+      <TimeStatus message={message} isOwnMessage={isOwnMessage} />
+    </div>
+  );
+};
+
 const Reactions = ({ message, currentUserId }: { message: ChatMessage; currentUserId?: string | null }) => {
   const reactionGroups = buildReactionGroups(message, currentUserId);
   if (!reactionGroups.length) return null;
@@ -232,12 +386,14 @@ const MessageContent = ({
   message,
   isOwnMessage,
   buildMediaUrl,
-  onOpenImage
+  onOpenImage,
+  onOpenContact
 }: {
   message: ChatMessage;
   isOwnMessage: boolean;
   buildMediaUrl: (primary?: string, fallback?: string) => string;
   onOpenImage: () => void;
+  onOpenContact: (message: ChatMessage) => void;
 }) => {
   switch (message.messageType) {
     case 'text':
@@ -253,6 +409,12 @@ const MessageContent = ({
     case 'document':
     case 'media':
       return <DocumentMessageContent message={message} isOwnMessage={isOwnMessage} buildMediaUrl={buildMediaUrl} />;
+    case 'location':
+      return <LocationMessageContent message={message} isOwnMessage={isOwnMessage} />;
+    case 'contact':
+      return <ContactMessageContent message={message} isOwnMessage={isOwnMessage} onOpenDetails={onOpenContact} />;
+    case 'poll':
+      return <PollMessageContent message={message} isOwnMessage={isOwnMessage} />;
     default:
       return <TextMessageContent message={message} isOwnMessage={isOwnMessage} />;
   }
@@ -370,7 +532,8 @@ const MessageBubble = ({
   currentUserId,
   showName,
   buildMediaUrl,
-  onOpenImage
+  onOpenImage,
+  onOpenContact
 }: {
   message: ChatMessage;
   isOwnMessage: boolean;
@@ -378,6 +541,7 @@ const MessageBubble = ({
   showName: boolean;
   buildMediaUrl: (primary?: string, fallback?: string) => string;
   onOpenImage: () => void;
+  onOpenContact: (message: ChatMessage) => void;
 }) => {
   const displayName = isOwnMessage
     ? (message.sender || 'user')
@@ -421,6 +585,7 @@ const MessageBubble = ({
       isOwnMessage={isOwnMessage}
       buildMediaUrl={buildMediaUrl}
       onOpenImage={onOpenImage}
+      onOpenContact={onOpenContact}
     />
     <Reactions message={message} currentUserId={currentUserId} />
   </div>
@@ -445,6 +610,8 @@ export function Message({
 }: MessageProps) {
   const isOwnMessage = message.isFromMe;
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [activeContact, setActiveContact] = useState<ParsedContactDetails | null>(null);
+  const [draftMessage, setDraftMessage] = useState('');
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
   const buildMediaUrl = (primary?: string, fallback?: string) => {
     const pick = primary || fallback || '';
@@ -458,6 +625,22 @@ export function Message({
     const relativePath = (mediaMatch ? mediaMatch[0].replace(/^\/+/, '') : normalizedPath.replace(/^\/+/, ''));
 
     return `${normalizedApiBase}/${relativePath}`;
+  };
+
+  const handleOpenContactDetails = (contactMessage: ChatMessage) => {
+    const details = parseContactDetails(contactMessage);
+    if (!details) return;
+    setActiveContact(details);
+    setDraftMessage('');
+  };
+
+  const openAppChat = (phone: string, text?: string) => {
+    const cleanPhone = String(phone || '').replace(/[^\d]/g, '');
+    if (!cleanPhone) return;
+    const messageQuery = text && text.trim()
+      ? `&message=${encodeURIComponent(text.trim())}`
+      : '';
+    window.location.href = `/chat?contact=${encodeURIComponent(cleanPhone)}${messageQuery}`;
   };
 
   return (
@@ -497,6 +680,7 @@ export function Message({
           showName={showName}
           buildMediaUrl={buildMediaUrl}
           onOpenImage={() => setIsImageModalOpen(true)}
+          onOpenContact={handleOpenContactDetails}
         />
 
         {!isOwnMessage && (
@@ -524,6 +708,67 @@ export function Message({
         imageSrc={buildMediaUrl(message.mediaPath, message.mediaPath ? undefined : `imgs/${message.id}.webp`)}
         imageAlt="Chat image"
       />
+
+      {activeContact && (
+        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[var(--chat-border)] bg-[var(--chat-panel)] p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="text-sm text-[var(--chat-muted)]">Contact Details</p>
+                <h3 className="text-lg font-semibold text-[var(--chat-text)]">{activeContact.name}</h3>
+                <p className="text-sm text-[var(--chat-muted)]">{activeContact.phone || 'Phone unavailable'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveContact(null)}
+                className="rounded-md px-2 py-1 text-xs border border-[var(--chat-border)] text-[var(--chat-muted)] hover:bg-black/5"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button
+                type="button"
+                disabled={!activeContact.phone}
+                onClick={() => {
+                  if (!activeContact.phone) return;
+                  window.open(`tel:${activeContact.phone}`, '_self');
+                }}
+                className="rounded-lg px-3 py-2 text-sm font-semibold border border-[var(--chat-border)] text-[var(--chat-text)] hover:bg-black/5 disabled:opacity-50"
+              >
+                Call
+              </button>
+              <button
+                type="button"
+                disabled={!activeContact.phone}
+                onClick={() => openAppChat(activeContact.phone)}
+                className="rounded-lg px-3 py-2 text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                Open Chat
+              </button>
+            </div>
+
+            <label className="block text-xs text-[var(--chat-muted)] mb-1">Quick message</label>
+            <textarea
+              value={draftMessage}
+              onChange={(event) => setDraftMessage(event.target.value)}
+              rows={3}
+              placeholder="Type a message to prefill chat..."
+              className="w-full rounded-lg border border-[var(--chat-border)] bg-transparent px-3 py-2 text-sm text-[var(--chat-text)] mb-3"
+            />
+
+            <button
+              type="button"
+              disabled={!activeContact.phone || !draftMessage.trim()}
+              onClick={() => openAppChat(activeContact.phone, draftMessage)}
+              className="w-full rounded-lg px-3 py-2 text-sm font-semibold bg-[var(--chat-accent)] text-white disabled:opacity-50"
+            >
+              Open Chat With Message
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

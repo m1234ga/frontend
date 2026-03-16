@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { User, Check, XCircle, UserPlus, Star, Phone, MoreHorizontal, Pin } from 'lucide-react';
+import { User, Check, XCircle, UserPlus, Star, Phone, MoreHorizontal, Pin, Users } from 'lucide-react';
 import { Chat } from '@shared/Models';
 
 import TypingIndicator from './TypingIndicator';
@@ -20,6 +20,8 @@ interface ChatHeaderProps {
   pinnedCount: number;
   pinnedPreview?: string;
   onPinnedClick: () => void;
+  isGroupChat?: boolean;
+  onGroupInfoClick?: () => void;
   onClose?: () => void;
 }
 
@@ -35,6 +37,8 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   pinnedCount,
   pinnedPreview,
   onPinnedClick,
+  isGroupChat,
+  onGroupInfoClick,
   onClose
 }) => {
   const displayName = selectedConversation.name?.split('-_-')[0] || selectedConversation.phone;
@@ -154,6 +158,18 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             </span>
           )}
         </button>
+
+        {isGroupChat && onGroupInfoClick && (
+          <button
+            onClick={onGroupInfoClick}
+            className="enterprise-header-btn"
+            title="Group participants"
+            aria-label="Group participants"
+          >
+            <Users className="w-4 h-4" />
+            <span className="hidden lg:inline">Group</span>
+          </button>
+        )}
 
         <button className="enterprise-header-btn" aria-label="More actions" title="More actions">
           <MoreHorizontal className="w-4 h-4" />

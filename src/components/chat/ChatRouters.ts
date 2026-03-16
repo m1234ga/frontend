@@ -151,6 +151,212 @@ export default function Chat(token: string) {
       throw error;
     }
   }
+
+  // Session actions
+  async function GetSessionStatus() {
+    const response = await fetch(`${apiUrl}/settings/session/status`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to fetch session status');
+    return response.json();
+  }
+
+  async function ConnectSession(subscribe?: string[], immediate: boolean = true) {
+    const response = await fetch(`${apiUrl}/settings/session/connect`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        Subscribe: Array.isArray(subscribe) && subscribe.length > 0 ? subscribe : ['Message', 'ReadReceipt', 'HistorySync', 'ChatPresence'],
+        Immediate: immediate
+      })
+    });
+    if (!response.ok) throw new Error('Failed to connect session');
+    return response.json();
+  }
+
+  async function DisconnectSession() {
+    const response = await fetch(`${apiUrl}/settings/session/disconnect`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to disconnect session');
+    return response.json();
+  }
+
+  async function LogoutSession() {
+    const response = await fetch(`${apiUrl}/settings/session/logout`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to logout session');
+    return response.json();
+  }
+
+  async function GetSessionQr() {
+    const response = await fetch(`${apiUrl}/settings/session/qr`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to fetch session QR');
+    return response.json();
+  }
+
+  // Group actions
+  async function GetGroupsList() {
+    const response = await fetch(`${apiUrl}/settings/groups/list`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to list groups');
+    return response.json();
+  }
+
+  async function GetGroupInfo(groupJid: string) {
+    const response = await fetch(`${apiUrl}/settings/groups/info?groupJid=${encodeURIComponent(groupJid)}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to get group info');
+    return response.json();
+  }
+
+  async function GetGroupInviteLink(groupJid: string) {
+    const response = await fetch(`${apiUrl}/settings/groups/invite-link?groupJid=${encodeURIComponent(groupJid)}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) throw new Error('Failed to get group invite link');
+    return response.json();
+  }
+
+  async function CreateGroup(name: string, participants: string[]) {
+    const response = await fetch(`${apiUrl}/settings/groups/create`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ name, participants })
+    });
+    if (!response.ok) throw new Error('Failed to create group');
+    return response.json();
+  }
+
+  async function SetGroupName(groupJid: string, name: string) {
+    const response = await fetch(`${apiUrl}/settings/groups/name`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ groupJid, name })
+    });
+    if (!response.ok) throw new Error('Failed to set group name');
+    return response.json();
+  }
+
+  async function SetGroupPhoto(groupJid: string, image: string) {
+    const response = await fetch(`${apiUrl}/settings/groups/photo`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ groupJid, image })
+    });
+    if (!response.ok) throw new Error('Failed to set group photo');
+    return response.json();
+  }
+
+  async function RemoveGroupPhoto(groupJid: string) {
+    const response = await fetch(`${apiUrl}/settings/groups/photo/remove`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ groupJid })
+    });
+    if (!response.ok) throw new Error('Failed to remove group photo');
+    return response.json();
+  }
+
+  async function SetGroupLocked(groupJid: string, locked: boolean) {
+    const response = await fetch(`${apiUrl}/settings/groups/locked`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ groupJid, locked })
+    });
+    if (!response.ok) throw new Error('Failed to set group locked status');
+    return response.json();
+  }
+
+  async function SetGroupEphemeral(groupJid: string, duration: '24h' | '7d' | '90d' | 'off') {
+    const response = await fetch(`${apiUrl}/settings/groups/ephemeral`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ groupJid, duration })
+    });
+    if (!response.ok) throw new Error('Failed to set group ephemeral duration');
+    return response.json();
+  }
+
+  async function SetGroupParticipants(groupJid: string, participants: string[]) {
+    const response = await fetch(`${apiUrl}/settings/groups/participants`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ groupJid, participants })
+    });
+    if (!response.ok) throw new Error('Failed to set group participants');
+    return response.json();
+  }
+
+  async function DeleteGroup(groupJid: string) {
+    const response = await fetch(`${apiUrl}/settings/groups/delete`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ groupJid })
+    });
+    if (!response.ok) throw new Error('Failed to delete group');
+    return response.json();
+  }
   async function GetMessagesById(id: string, limit: number = 10, before?: string, beforeId?: string) {
     try {
       const url = new URL(`${apiUrl}/GetMessages/${id}`);
@@ -952,7 +1158,23 @@ export default function Chat(token: string) {
     GetChatsPage,
     RefreshChatAvatar,
     GetWuzUserInfo,
-    GetWuzProfile
+    GetWuzProfile,
+    GetSessionStatus,
+    ConnectSession,
+    DisconnectSession,
+    LogoutSession,
+    GetSessionQr,
+    GetGroupsList,
+    GetGroupInfo,
+    GetGroupInviteLink,
+    CreateGroup,
+    SetGroupName,
+    SetGroupPhoto,
+    RemoveGroupPhoto,
+    SetGroupLocked,
+    SetGroupEphemeral,
+    SetGroupParticipants,
+    DeleteGroup
   }
 }
 
