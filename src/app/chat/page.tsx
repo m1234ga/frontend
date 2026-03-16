@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import { ChatSidebarOptimized } from '@/components/chat/ChatSidebarOptimized';
 import { ChatAreaOptimized } from '@/components/chat/ChatAreaOptimized';
 import { useSocket } from '@/contexts/SocketContext';
@@ -130,7 +130,7 @@ const markChatAsReadSafe = async (
   }
 };
 
-export default function ChatPage() {
+function ChatPageInner() {
   const [selectedConversation, setSelectedConversation] = useState<ChatModel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isHistorySyncing, setIsHistorySyncing] = useState(false);
@@ -518,5 +518,20 @@ export default function ChatPage() {
         onClose={handleClose}
       />
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ChatPageInner />
+    </Suspense>
   );
 }

@@ -650,7 +650,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                 />
 
                 <div className="flex-1 relative overflow-hidden">
-                    {isServerLoading ? (
+                    {isServerLoading && conversations.length === 0 ? (
                         <div className="flex items-center justify-center h-full">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
                         </div>
