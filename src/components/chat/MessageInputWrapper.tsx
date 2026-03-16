@@ -506,6 +506,7 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
             const targetPhone = normalizeOutgoingPhone(selectedConversation.id, selectedConversation.phone);
 
             socket.emit('send_poll', {
+                id: Date.now().toString(),
                 chatId: selectedConversation.id,
                 phone: targetPhone,
                 pollName,

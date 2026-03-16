@@ -242,10 +242,11 @@ function ChatPageInner() {
     return false;
   }, [selectedConversation, messages, chatApi]);
 
-  const handleMessageSent = useCallback((data: { success: boolean; messageId: string; originalMessage: ChatMessage }) => {
+  const handleMessageSent = useCallback((data: { success: boolean; messageId: string; originalMessage?: ChatMessage }) => {
+    if (!data?.originalMessage?.id) return;
     setMessages(prev => normalizeMessages(
       prev.map(msg =>
-        msg.id === data.originalMessage.id
+        msg.id === data.originalMessage!.id
           ? { ...msg, status: 'delivered', isDelivered: true, message: msg.message.replace(' (Sending...)', '') }
           : msg
       )
@@ -253,11 +254,12 @@ function ChatPageInner() {
   }, []);
 
   // Handle message error
-  const handleMessageError = useCallback((data: { success: boolean; error: string; originalMessage: ChatMessage }) => {
+  const handleMessageError = useCallback((data: { success: boolean; error?: string; originalMessage?: ChatMessage }) => {
     console.error('Message failed to send:', data);
+    if (!data?.originalMessage?.id) return;
     setMessages(prev => normalizeMessages(
       prev.map(msg =>
-        msg.id === data.originalMessage.id
+        msg.id === data.originalMessage!.id
           ? { ...msg, status: 'failed', message: `${msg.message.replace(' (Sending...)', '')} (Failed to send)` }
           : msg
       )
