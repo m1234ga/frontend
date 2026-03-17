@@ -403,8 +403,35 @@ function ChatPageInner() {
   const handleNewMessage = useCallback((message: IncomingMessage) => {
     if (!selectedConversation || message.chatId !== selectedConversation.id) {
       const existingConversation = getConversation(message.chatId);
+      const inferredName = String(
+        message.pushName
+        || existingConversation?.name
+        || message.chatId
+      );
       const currentUnread = existingConversation?.unreadCount || 0;
+
+      if (!existingConversation) {
+        addConversation({
+          id: message.chatId,
+          name: inferredName,
+          participants: [],
+          lastMessage: stripSendingSuffix(message.message) || message.message,
+          lastMessageTime: message.timeStamp || message.timestamp || new Date(),
+          unreadCount: message.isFromMe ? 0 : 1,
+          isTyping: false,
+          isOnline: false,
+          messages: [],
+          phone: String(message.phone || message.ContactId || message.chatId),
+          contactId: String(message.ContactId || message.phone || message.chatId),
+          pushName: message.pushName,
+          tags: [],
+          status: 'open'
+        });
+        return;
+      }
+
       updateConversation(message.chatId, {
+        name: inferredName,
         lastMessage: stripSendingSuffix(message.message) || message.message,
         lastMessageTime: message.timeStamp || message.timestamp || new Date(),
         unreadCount: currentUnread + 1
@@ -430,7 +457,7 @@ function ChatPageInner() {
       }
       return normalizeMessages([...prev, { ...message, message: stripSendingSuffix(message.message) || message.message }]);
     });
-  }, [selectedConversation, chatApi, getConversation, updateConversation]);
+  }, [selectedConversation, chatApi, getConversation, updateConversation, addConversation]);
 
   const handleMessageUpdate = useCallback((updatedMessage: IncomingMessage) => {
     if (!selectedConversation || updatedMessage.chatId !== selectedConversation.id) {
@@ -447,13 +474,56 @@ function ChatPageInner() {
     });
   }, [selectedConversation]);
 
-  const handleChatUpdate = useCallback((chat: ChatModel & { unread_count?: number }) => {
+  const handleChatUpdate = useCallback((chat: ChatModel & { unread_count?: number; unReadCount?: number }) => {
     const unreadCount = chat.unread_count ?? chat.unreadCount;
+    const normalizedName = String(
+      chat.name
+      || chat.pushname
+      || chat.pushName
+      || chat.fullName
+      || chat.firstName
+      || chat.id
+    );
+    const normalizedPhone = String(chat.phone || chat.contactId || chat.id);
+    const normalizedContactId = String(chat.contactId || chat.phone || chat.id);
+    const existing = getConversation(chat.id);
+
+    if (!existing) {
+      addConversation({
+        id: chat.id,
+        name: normalizedName,
+        participants: Array.isArray(chat.participants) ? chat.participants : [],
+        lastMessage: chat.lastMessage || '',
+        lastMessageTime: chat.lastMessageTime || new Date(),
+        unreadCount: unreadCount ?? chat.unReadCount ?? 0,
+        isTyping: Boolean(chat.isTyping),
+        isOnline: Boolean(chat.isOnline),
+        messages: [],
+        phone: normalizedPhone,
+        contactId: normalizedContactId,
+        pushname: chat.pushname,
+        pushName: chat.pushName,
+        fullName: chat.fullName,
+        firstName: chat.firstName,
+        tags: Array.isArray(chat.tags) ? chat.tags : [],
+        status: chat.status || 'open',
+        isArchived: chat.isArchived,
+        isMuted: chat.isMuted,
+        assignedTo: chat.assignedTo,
+        avatar: chat.avatar,
+        reason: chat.reason,
+      });
+      return;
+    }
+
     updateConversation(chat.id, {
       ...chat,
+      name: normalizedName,
+      phone: normalizedPhone,
+      contactId: normalizedContactId,
       ...(unreadCount !== undefined ? { unreadCount } : {})
     });
-  }, [updateConversation]);
+  }, [updateConversation, getConversation, addConversation]);
 
   useEffect(() => {
     onNewMessage(handleNewMessage);

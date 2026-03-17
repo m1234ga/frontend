@@ -250,8 +250,58 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                 ?? updatedChat.unReadCount
                 ?? updatedChat.unreadCount;
 
+            const normalizedName = String(
+                updatedChat.name
+                || updatedChat.pushname
+                || updatedChat.pushName
+                || updatedChat.fullName
+                || updatedChat.firstName
+                || updatedChat.id
+            );
+
+            const normalizedPhone = String(updatedChat.phone || updatedChat.contactId || updatedChat.id);
+            const normalizedContactId = String(updatedChat.contactId || updatedChat.phone || updatedChat.id);
+            const normalizedLastMessage = String(updatedChat.lastMessage || '');
+            const normalizedLastMessageTime = updatedChat.lastMessageTime || new Date();
+
+            const exists = latestConversationsRef.current.some((conversation) => conversation.id === updatedChat.id);
+            if (!exists) {
+                addConversation(normalizeConversation({
+                    id: updatedChat.id,
+                    name: normalizedName,
+                    participants: Array.isArray(updatedChat.participants) ? updatedChat.participants : [],
+                    lastMessage: normalizedLastMessage,
+                    lastMessageTime: normalizedLastMessageTime,
+                    unreadCount: typeof normalizedUnread === 'number' ? normalizedUnread : 0,
+                    isTyping: Boolean(updatedChat.isTyping),
+                    isOnline: Boolean(updatedChat.isOnline),
+                    messages: [],
+                    phone: normalizedPhone,
+                    contactId: normalizedContactId,
+                    tags: normalizeChatTags((updatedChat as ChatUpdateEvent & { tagsname?: unknown; tagsName?: unknown }).tags
+                        ?? (updatedChat as ChatUpdateEvent & { tagsname?: unknown; tagsName?: unknown }).tagsname
+                        ?? (updatedChat as ChatUpdateEvent & { tagsname?: unknown; tagsName?: unknown }).tagsName),
+                    status: updatedChat.status || 'open',
+                    pushname: updatedChat.pushname,
+                    pushName: updatedChat.pushName,
+                    fullName: updatedChat.fullName,
+                    firstName: updatedChat.firstName,
+                    isMyContact: updatedChat.isMyContact,
+                    isLead: updatedChat.isLead,
+                    isArchived: updatedChat.isArchived,
+                    isMuted: updatedChat.isMuted,
+                    assignedTo: updatedChat.assignedTo,
+                    avatar: updatedChat.avatar,
+                    reason: updatedChat.reason,
+                }));
+                return;
+            }
+
             updateConversation(updatedChat.id, {
                 ...updatedChat,
+                name: normalizedName,
+                phone: normalizedPhone,
+                contactId: normalizedContactId,
                 tags: normalizeChatTags((updatedChat as ChatUpdateEvent & { tagsname?: unknown; tagsName?: unknown }).tags
                     ?? (updatedChat as ChatUpdateEvent & { tagsname?: unknown; tagsName?: unknown }).tagsname
                     ?? (updatedChat as ChatUpdateEvent & { tagsname?: unknown; tagsName?: unknown }).tagsName),
@@ -265,7 +315,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
 
         onChatUpdate(handleUpdate);
         onChatPresence(handlePresence);
-    }, [onChatUpdate, onChatPresence, updateConversation]);
+    }, [onChatUpdate, onChatPresence, updateConversation, addConversation]);
 
     useEffect(() => {
         if (activeTab !== 'contacts') return;
