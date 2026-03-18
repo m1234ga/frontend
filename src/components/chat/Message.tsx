@@ -778,6 +778,7 @@ export const MemoizedMessage = memo(Message, (prevProps, nextProps) => {
     prevProps.message.id === nextProps.message.id &&
     prevProps.message.timeStamp === nextProps.message.timeStamp &&
     prevProps.message.message === nextProps.message.message &&
+    prevProps.message.reactions === nextProps.message.reactions &&
     prevProps.isFavorite === nextProps.isFavorite &&
     prevProps.isMenuOpen === nextProps.isMenuOpen &&
     prevProps.showName === nextProps.showName
