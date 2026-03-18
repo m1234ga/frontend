@@ -4,56 +4,59 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { QrCode, Plug, PlugZap, LogOut, RefreshCw, Save, Shield } from 'lucide-react';
+import { QrCode, RefreshCw, Plug, PlugZap, LogOut } from 'lucide-react';
 
 type SessionStatus = {
   Connected?: boolean;
+  connected?: boolean;
+  IsConnected?: boolean;
   LoggedIn?: boolean;
+  loggedIn?: boolean;
+  IsLoggedIn?: boolean;
 };
 
-type WuzUserOption = {
-  id: string;
-  name: string;
-  jid?: string;
-  connected?: number | boolean;
-};
-
-type GroupOption = {
-  jid: string;
-  name: string;
-};
-
-const AVAILABLE_EVENTS = ['Message', 'ReadReceipt', 'HistorySync', 'ChatPresence'];
+function toBool(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'connected';
+  }
+  return false;
+}
 
 export default function SettingsPage() {
-  const { authenticated, loading, token, user } = useAuth();
+  const { authenticated, loading, token } = useAuth();
   const router = useRouter();
 
   const [status, setStatus] = useState<SessionStatus>({});
-  const [qrCode, setQrCode] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [qrCode, setQrCode] = useState('');
+  const [message, setMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const [subscribe, setSubscribe] = useState<string[]>(['Message', 'ReadReceipt', 'HistorySync', 'ChatPresence']);
-  const [immediate, setImmediate] = useState(true);
-  const [webhookURL, setWebhookURL] = useState('');
-  const [hmacKey, setHmacKey] = useState('');
-  const [hasHmacConfigured, setHasHmacConfigured] = useState(false);
-  const [wuzUsers, setWuzUsers] = useState<WuzUserOption[]>([]);
-  const [mappedWuzUserId, setMappedWuzUserId] = useState<string>('');
-  const [groups, setGroups] = useState<GroupOption[]>([]);
-  const [selectedGroupJid, setSelectedGroupJid] = useState('');
-  const [groupName, setGroupName] = useState('');
-  const [newGroupName, setNewGroupName] = useState('');
-  const [newGroupParticipants, setNewGroupParticipants] = useState('');
-  const [groupPhotoBase64, setGroupPhotoBase64] = useState('');
-  const [groupLocked, setGroupLocked] = useState(false);
-  const [groupEphemeral, setGroupEphemeral] = useState<'24h' | '7d' | '90d' | 'off'>('off');
-  const [groupInviteLink, setGroupInviteLink] = useState('');
-  const [groupInfoPreview, setGroupInfoPreview] = useState('');
-  const [groupParticipantsToSet, setGroupParticipantsToSet] = useState('');
-  const [groupParticipantOperation, setGroupParticipantOperation] = useState<'set' | 'add' | 'remove'>('set');
-  const [groupActionMessage, setGroupActionMessage] = useState('');
+  const isConnected = useMemo(() => {
+    // Accept status key variants from different WUZ API versions/proxies.
+    return (
+      toBool(status.Connected) ||
+      toBool(status.connected) ||
+      toBool(status.IsConnected) ||
+      toBool(status.LoggedIn) ||
+      toBool(status.loggedIn) ||
+      toBool(status.IsLoggedIn)
+    );
+  }, [status]);
+
+  const isLoggedIn = useMemo(() => {
+    return (
+      toBool(status.LoggedIn) ||
+      toBool(status.loggedIn) ||
+      toBool(status.IsLoggedIn)
+    );
+  }, [status]);
+
+  const canShowQr = useMemo(() => isConnected && !isLoggedIn, [isConnected, isLoggedIn]);
 
   const apiBase = useMemo(() => {
     return (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
@@ -81,7 +84,7 @@ export default function SettingsPage() {
     setStatus(data?.data || data || {});
   }, [apiBase, authHeaders]);
 
-  const fetchQr = useCallback(async () => {
+  const fetchQrCode = useCallback(async () => {
     const response = await fetch(`${apiBase}/api/chat/api/settings/session/qr`, {
       method: 'GET',
       headers: authHeaders,
@@ -97,103 +100,24 @@ export default function SettingsPage() {
     setQrCode(typeof qr === 'string' ? qr : '');
   }, [apiBase, authHeaders]);
 
-  const fetchWebhook = useCallback(async () => {
-    const response = await fetch(`${apiBase}/api/chat/api/settings/webhook`, {
-      method: 'GET',
-      headers: authHeaders,
-    });
-
-    if (!response.ok) return;
-
-    const data = await response.json();
-    const webhook = data?.data?.webhook || data?.webhook || '';
-    const subscribeData = data?.data?.subscribe || data?.subscribe || [];
-
-    setWebhookURL(String(webhook || ''));
-    if (Array.isArray(subscribeData) && subscribeData.length > 0) {
-      setSubscribe(subscribeData.map((e: unknown) => String(e)));
-    }
-  }, [apiBase, authHeaders]);
-
-  const fetchHmacStatus = useCallback(async () => {
-    const response = await fetch(`${apiBase}/api/chat/api/settings/hmac`, {
-      method: 'GET',
-      headers: authHeaders,
-    });
-
-    if (!response.ok) {
-      setHasHmacConfigured(false);
-      return;
-    }
-
-    const data = await response.json();
-    const masked = data?.hmac_key || data?.data?.hmac_key || '';
-    setHasHmacConfigured(Boolean(masked));
-  }, [apiBase, authHeaders]);
-
-  const fetchWuzUsers = useCallback(async () => {
-    const response = await fetch(`${apiBase}/api/chat/api/settings/wuz-users`, {
-      method: 'GET',
-      headers: authHeaders,
-    });
-
-    if (!response.ok) {
-      setWuzUsers([]);
-      setMappedWuzUserId('');
-      return;
-    }
-
-    const data = await response.json();
-    const list: unknown[] = Array.isArray(data?.users) ? data.users : [];
-    setWuzUsers(list.map((item: unknown) => {
-      const entry = (item && typeof item === 'object') ? (item as Record<string, unknown>) : {};
-      return {
-        id: String(entry.id || ''),
-        name: String(entry.name || ''),
-        jid: entry.jid ? String(entry.jid) : undefined,
-        connected: entry.connected as number | boolean | undefined,
-      };
-    }).filter((u: WuzUserOption) => !!u.id));
-    setMappedWuzUserId(String(data?.mappedWuzUserId || ''));
-  }, [apiBase, authHeaders]);
-
-  const fetchGroups = useCallback(async () => {
-    const response = await fetch(`${apiBase}/api/chat/api/settings/groups/list`, {
-      method: 'GET',
-      headers: authHeaders,
-    });
-
-    if (!response.ok) {
-      setGroups([]);
-      return;
-    }
-
-    const data = await response.json();
-    const list: unknown[] = Array.isArray(data?.data?.Groups) ? data.data.Groups : Array.isArray(data?.Groups) ? data.Groups : [];
-    const normalized = list.map((item: unknown) => {
-      const entry = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
-      return {
-        jid: String(entry.JID || entry.jid || ''),
-        name: String(entry.Name || entry.name || entry.JID || entry.jid || ''),
-      };
-    }).filter((group: GroupOption) => !!group.jid);
-
-    setGroups(normalized);
-    if (!selectedGroupJid && normalized.length > 0) {
-      setSelectedGroupJid(normalized[0].jid);
-      setGroupName(normalized[0].name);
-    }
-  }, [apiBase, authHeaders, selectedGroupJid]);
-
-  const refreshAll = useCallback(async () => {
+  const refreshStatus = useCallback(async () => {
     setIsLoading(true);
     try {
-      await Promise.all([fetchStatus(), fetchWebhook(), fetchHmacStatus(), fetchWuzUsers()]);
-      await fetchQr();
+      await fetchStatus();
+      await fetchQrCode();
     } finally {
       setIsLoading(false);
     }
-  }, [fetchStatus, fetchWebhook, fetchHmacStatus, fetchWuzUsers, fetchQr]);
+  }, [fetchStatus, fetchQrCode]);
+
+  const refreshStatusSilent = useCallback(async () => {
+    try {
+      await fetchStatus();
+      await fetchQrCode();
+    } catch {
+      // Silent refresh intentionally ignores transient polling errors.
+    }
+  }, [fetchStatus, fetchQrCode]);
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -202,108 +126,103 @@ export default function SettingsPage() {
     }
 
     if (authenticated) {
-      refreshAll();
+      refreshStatus();
     }
-  }, [authenticated, loading, router, refreshAll]);
+  }, [authenticated, loading, router, refreshStatus]);
 
-  const runAction = async (path: string, method: 'POST' | 'DELETE', body?: unknown) => {
+  useEffect(() => {
+    if (!authenticated) return;
+
+    const intervalId = setInterval(() => {
+      void refreshStatusSilent();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [authenticated, refreshStatusSilent]);
+
+  const handleConnect = useCallback(async () => {
     setIsSubmitting(true);
+    setErrorMessage('');
+    setMessage('');
+
     try {
-      const response = await fetch(`${apiBase}${path}`, {
-        method,
+      const response = await fetch(`${apiBase}/api/chat/api/settings/session/connect`, {
+        method: 'POST',
         headers: authHeaders,
-        body: body ? JSON.stringify(body) : undefined,
+        body: JSON.stringify({
+          Subscribe: ['Message', 'ReadReceipt', 'HistorySync', 'ChatPresence'],
+          Immediate: true,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(String(payload?.error || `Request failed with status ${response.status}`));
       }
 
-      await refreshAll();
+      setMessage('Connect request sent. If not logged in, scan the QR code.');
+      await refreshStatus();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'Failed to connect session.';
+      setErrorMessage(text);
+      setMessage('');
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [apiBase, authHeaders, refreshStatus]);
 
-  const fetchGroupInfo = useCallback(async () => {
-    if (!selectedGroupJid) return;
-    const response = await fetch(`${apiBase}/api/chat/api/settings/groups/info?groupJid=${encodeURIComponent(selectedGroupJid)}`, {
-      method: 'GET',
-      headers: authHeaders,
-    });
-    if (!response.ok) {
-      setGroupInfoPreview('Failed to load group info');
-      return;
-    }
-    const data = await response.json();
-    setGroupInfoPreview(JSON.stringify(data?.data || data, null, 2));
-  }, [apiBase, authHeaders, selectedGroupJid]);
-
-  const fetchGroupInviteLink = useCallback(async () => {
-    if (!selectedGroupJid) return;
-    const response = await fetch(`${apiBase}/api/chat/api/settings/groups/invite-link?groupJid=${encodeURIComponent(selectedGroupJid)}`, {
-      method: 'GET',
-      headers: authHeaders,
-    });
-    if (!response.ok) {
-      setGroupInviteLink('Failed to fetch invite link');
-      return;
-    }
-    const data = await response.json();
-    const link = data?.data?.InviteLink || data?.InviteLink || '';
-    setGroupInviteLink(String(link));
-  }, [apiBase, authHeaders, selectedGroupJid]);
-
-  const parseParticipants = useCallback((raw: string): string[] => {
-    return raw
-      .split(/[\n,]+/)
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .map((value) => value.replace(/\D/g, ''))
-      .filter(Boolean);
-  }, []);
-
-  useEffect(() => {
-    if (!selectedGroupJid) return;
-    const selected = groups.find((group) => group.jid === selectedGroupJid);
-    if (selected) {
-      setGroupName(selected.name);
-    }
-  }, [selectedGroupJid, groups]);
-
-  const runGroupAction = useCallback(async (path: string, body?: unknown) => {
+  const runSessionAction = useCallback(async (path: string, successMessage: string) => {
     setIsSubmitting(true);
-    setGroupActionMessage('');
+    setErrorMessage('');
+    setMessage('');
+
     try {
       const response = await fetch(`${apiBase}${path}`, {
         method: 'POST',
         headers: authHeaders,
-        body: body ? JSON.stringify(body) : undefined,
       });
 
       if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(String(payload?.error || `Request failed with status ${response.status}`));
       }
 
-      const data = await response.json();
-      const details = String(data?.data?.Details || data?.Details || data?.message || 'Success');
-      setGroupActionMessage(details);
-      await refreshAll();
+      setMessage(successMessage);
+      await refreshStatus();
     } catch (error) {
-      setGroupActionMessage(error instanceof Error ? error.message : 'Group action failed');
+      const text = error instanceof Error ? error.message : 'Session action failed.';
+      setErrorMessage(text);
+      setMessage('');
     } finally {
       setIsSubmitting(false);
     }
-  }, [apiBase, authHeaders, refreshAll]);
+  }, [apiBase, authHeaders, refreshStatus]);
 
-  const toggleSubscribe = (eventName: string) => {
-    setSubscribe((prev) => {
-      if (prev.includes(eventName)) {
-        return prev.filter((item) => item !== eventName);
-      }
-      return [...prev, eventName];
-    });
-  };
+  const handleDisconnect = useCallback(async () => {
+    await runSessionAction('/api/chat/api/settings/session/disconnect', 'Session disconnected.');
+  }, [runSessionAction]);
+
+  const handleLogout = useCallback(async () => {
+    await runSessionAction('/api/chat/api/settings/session/logout', 'Session logged out.');
+  }, [runSessionAction]);
+
+  const handleLoadQr = useCallback(async () => {
+    setIsSubmitting(true);
+    setErrorMessage('');
+    setMessage('');
+
+    try {
+      await fetchQrCode();
+      setMessage('QR refreshed.');
+      await fetchStatus();
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'Failed to load QR.';
+      setErrorMessage(text);
+      setMessage('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [fetchQrCode, fetchStatus]);
 
   if (loading || isLoading) {
     return (
@@ -318,17 +237,17 @@ export default function SettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="max-w-6xl mx-auto space-y-6 pb-8">
+      <div className="max-w-3xl mx-auto space-y-6 pb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Session Settings</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Manage connect/disconnect and configuration for current logged-in contact: <span className="font-semibold">{user?.username || 'Unknown'}</span>
+              Connect your WUZ session and scan QR when needed.
             </p>
           </div>
           <button
             type="button"
-            onClick={refreshAll}
+            onClick={refreshStatus}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
             <RefreshCw className="w-4 h-4" />
@@ -336,75 +255,47 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Connected</p>
-            <p className={`text-2xl font-bold ${status.Connected ? 'text-emerald-600' : 'text-red-500'}`}>{status.Connected ? 'Yes' : 'No'}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Logged In</p>
-            <p className={`text-2xl font-bold ${status.LoggedIn ? 'text-emerald-600' : 'text-red-500'}`}>{status.LoggedIn ? 'Yes' : 'No'}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">HMAC</p>
-            <p className={`text-2xl font-bold ${hasHmacConfigured ? 'text-emerald-600' : 'text-amber-500'}`}>{hasHmacConfigured ? 'Configured' : 'Not Set'}</p>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">WUZ User Mapping</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-            Link this logged-in app user to the correct WUZ API user instance.
-          </p>
-          <div className="flex flex-col md:flex-row gap-3 md:items-center">
-            <select
-              value={mappedWuzUserId}
-              onChange={(e) => setMappedWuzUserId(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+          <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">Connection Status</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${isConnected
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                }`}
             >
-              <option value="">Select WUZ user...</option>
-              {wuzUsers.map((instance) => (
-                <option key={instance.id} value={instance.id}>
-                  {instance.name} {instance.connected ? '(connected)' : '(disconnected)'}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={isSubmitting || !mappedWuzUserId}
-              onClick={() => runAction('/api/chat/api/settings/wuz-mapping', 'POST', { wuzUserId: mappedWuzUserId })}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+              {isConnected ? 'Connected' : 'Not Connected'}
+            </span>
+            <span
+              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${isLoggedIn
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+                }`}
             >
-              <Save className="w-4 h-4" />
-              Save Mapping
-            </button>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => runAction('/api/chat/api/settings/wuz-mapping', 'DELETE')}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-60"
-            >
-              Unlink
-            </button>
+              {isLoggedIn ? 'Logged In' : 'Not Logged In'}
+            </span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Connection Controls</h2>
-          <div className="flex flex-wrap gap-2">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">WUZ Session</h2>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {!isConnected && (
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleConnect}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                <Plug className="w-4 h-4" />
+                Connect
+              </button>
+            )}
             <button
               type="button"
-              disabled={isSubmitting}
-              onClick={() => runAction('/api/chat/api/settings/session/connect', 'POST', { Subscribe: subscribe, Immediate: immediate })}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-            >
-              <Plug className="w-4 h-4" />
-              Connect
-            </button>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => runAction('/api/chat/api/settings/session/disconnect', 'POST')}
+              disabled={isSubmitting || !isConnected}
+              onClick={handleDisconnect}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60"
             >
               <PlugZap className="w-4 h-4" />
@@ -412,119 +303,46 @@ export default function SettingsPage() {
             </button>
             <button
               type="button"
-              disabled={isSubmitting}
-              onClick={() => runAction('/api/chat/api/settings/session/logout', 'POST')}
+              disabled={isSubmitting || !isConnected}
+              onClick={handleLogout}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
             >
               <LogOut className="w-4 h-4" />
-              Logout Session
+              Logout
             </button>
-          </div>
-
-          <div className="mt-4 flex items-center gap-2">
-            <input
-              id="immediate"
-              type="checkbox"
-              checked={immediate}
-              onChange={(e) => setImmediate(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            <label htmlFor="immediate" className="text-sm text-gray-700 dark:text-gray-300">Immediate connect check</label>
-          </div>
-
-          <div className="mt-4">
-            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Subscribe Events</p>
-            <div className="flex flex-wrap gap-2">
-              {AVAILABLE_EVENTS.map((eventName) => (
-                <button
-                  key={eventName}
-                  type="button"
-                  onClick={() => toggleSubscribe(eventName)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold ${subscribe.includes(eventName)
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
-                    }`}
-                >
-                  {eventName}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">Webhook Configuration</h2>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Webhook URL</label>
-            <input
-              type="text"
-              value={webhookURL}
-              onChange={(e) => setWebhookURL(e.target.value)}
-              placeholder="https://your-server/webhook"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => runAction('/api/chat/api/settings/webhook', 'POST', {
-                webhookURL,
-                subscribe,
-              })}
-              className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
-            >
-              <Save className="w-4 h-4" />
-              Save Webhook
-            </button>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">HMAC Configuration</h2>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">HMAC Key (min 32 chars)</label>
-            <input
-              type="password"
-              value={hmacKey}
-              onChange={(e) => setHmacKey(e.target.value)}
-              placeholder="Enter HMAC key"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={isSubmitting || hmacKey.length < 32}
-                onClick={() => runAction('/api/chat/api/settings/hmac', 'POST', { hmac_key: hmacKey })}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-              >
-                <Shield className="w-4 h-4" />
-                Save HMAC
-              </button>
+            {canShowQr && (
               <button
                 type="button"
                 disabled={isSubmitting}
-                onClick={() => runAction('/api/chat/api/settings/hmac', 'DELETE')}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 disabled:opacity-60"
+                onClick={handleLoadQr}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
               >
-                Clear HMAC
+                <QrCode className="w-4 h-4" />
+                Load QR
               </button>
-            </div>
+            )}
+            {message && <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
+            {errorMessage && <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
           </div>
-        </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 inline-flex items-center gap-2">
-            <QrCode className="w-5 h-5" />
-            QR Code
-          </h2>
-          {!status.LoggedIn && qrCode ? (
-            <Image
-              src={qrCode}
-              alt="WhatsApp QR Code"
-              width={256}
-              height={256}
-              unoptimized
-              className="w-64 h-64 object-contain border border-gray-200 dark:border-gray-700 rounded-lg"
-            />
-          ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">QR is available only when session is connected but not logged in.</p>
+          {canShowQr && (
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Scan this QR when the session is connected but not logged in.
+              </p>
+              {qrCode ? (
+                <Image
+                  src={qrCode}
+                  alt="WUZ session QR"
+                  width={256}
+                  height={256}
+                  unoptimized
+                  className="w-64 h-64 object-contain border border-gray-200 dark:border-gray-700 rounded-lg bg-white"
+                />
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No QR available yet. Click Load QR.</p>
+              )}
+            </div>
           )}
         </div>
       </div>

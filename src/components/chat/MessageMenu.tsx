@@ -1,18 +1,17 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Edit3, 
-  MessageSquare, 
-  Pin, 
-  PinOff, 
-  StickyNote, 
-  Reply, 
-  Heart, 
-  Forward, 
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  Edit3,
+  Pin,
+  PinOff,
+  StickyNote,
+  Reply,
+  Heart,
+  Forward,
   Trash2,
   X,
-  Check,
   Save,
   MoreVertical,
   Smile
@@ -54,97 +53,113 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [editText, setEditText] = useState(message.message);
   const [noteText, setNoteText] = useState(message.note || '');
+  const [isMounted, setIsMounted] = useState(false);
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({ top: 0, left: 0 });
+
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Calculate popup position to stay within viewport
-  const getPopupPosition = () => {
-    if (!buttonRef.current) return { 
-      horizontalPosition: 'right-full', 
-      horizontalMargin: 'mr-2',
-      verticalPosition: 'top-0',
-      verticalMargin: 'mt-0'
-    };
-    
+  const shouldShowPopup = isOpen || isEditing || isAddingNote;
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
+
+  const updatePopupPosition = useCallback(() => {
+    if (!buttonRef.current) return;
+
     const buttonRect = buttonRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const popupWidth = 320; // w-80 = 320px
-    const popupHeight = 400; // Estimated height for popup
-    
-    // Calculate horizontal position
-    let horizontalPosition = 'right-full';
-    let horizontalMargin = 'mr-2';
-    
-    if (isOwnMessage) {
-      const spaceOnLeft = buttonRect.left;
-      if (spaceOnLeft >= popupWidth) {
-        horizontalPosition = 'right-full';
-        horizontalMargin = 'mr-2';
-      } else {
-        horizontalPosition = 'left-full';
-        horizontalMargin = 'ml-2';
-      }
-    } else {
-      const spaceOnRight = viewportWidth - buttonRect.right;
-      if (spaceOnRight >= popupWidth) {
-        horizontalPosition = 'left-full';
-        horizontalMargin = 'ml-2';
-      } else {
-        horizontalPosition = 'right-full';
-        horizontalMargin = 'mr-2';
-      }
-    }
-    
-    // Calculate vertical position
-    let verticalPosition = 'top-0';
-    let verticalMargin = 'mt-0';
-    
-    const spaceBelow = viewportHeight - buttonRect.bottom;
-    const spaceAbove = buttonRect.top;
-    
-    if (spaceBelow >= popupHeight) {
-      // Enough space below, show below button
-      verticalPosition = 'top-0';
-      verticalMargin = 'mt-0';
-    } else if (spaceAbove >= popupHeight) {
-      // Not enough space below, but enough above, show above button
-      verticalPosition = 'bottom-0';
-      verticalMargin = 'mb-0';
-    } else {
-      // Not enough space on either side, show below but adjust if needed
-      verticalPosition = 'top-0';
-      verticalMargin = 'mt-0';
-    }
-    
-    return {
-      horizontalPosition,
-      horizontalMargin,
-      verticalPosition,
-      verticalMargin
-    };
-  };
+    const popupWidth = isEditing || isAddingNote ? 320 : 280;
+    const popupHeight = isEditing || isAddingNote ? 260 : 420;
+    const edgePadding = 8;
+    const gap = 8;
 
-  const popupPosition = getPopupPosition();
+    // Horizontal positioning
+    let left = isOwnMessage
+      ? buttonRect.left - popupWidth - gap
+      : buttonRect.right + gap;
 
-  // Handle click outside to close menu
+    if (isOwnMessage && left < edgePadding) {
+      left = buttonRect.right + gap;
+    }
+
+    if (left + popupWidth > viewportWidth - edgePadding) {
+      left = viewportWidth - popupWidth - edgePadding;
+    }
+    if (left < edgePadding) {
+      left = edgePadding;
+    }
+
+    // Vertical positioning - smart below/above detection
+    let top = buttonRect.bottom + gap;
+    let positionedAbove = false;
+
+    // Check if menu would overflow bottom of viewport
+    if (top + popupHeight > viewportHeight - edgePadding) {
+      // Not enough space below, try above
+      const topAbove = Math.max(edgePadding, buttonRect.top - popupHeight - gap);
+      top = topAbove;
+      positionedAbove = true;
+    }
+
+    setPopupStyle({
+      position: 'fixed',
+      left,
+      top,
+      zIndex: 120,
+      width: popupWidth,
+      maxHeight: `calc(100vh - ${edgePadding * 2}px)`
+    });
+  }, [isAddingNote, isEditing, isOwnMessage]);
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        if (isOpen) {
-          onToggle();
-        }
-      }
-    };
+    if (!shouldShowPopup) return;
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    updatePopupPosition();
+
+    const handleReposition = () => updatePopupPosition();
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
     };
-  }, [isOpen, onToggle]);
+  }, [shouldShowPopup, updatePopupPosition]);
+
+  useEffect(() => {
+    if (!shouldShowPopup) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const clickedInsideMenu = !!menuRef.current?.contains(target);
+      const clickedButton = !!buttonRef.current?.contains(target);
+
+      if (clickedInsideMenu || clickedButton) {
+        return;
+      }
+
+      if (isOpen) {
+        onToggle();
+      }
+
+      if (isEditing) {
+        setIsEditing(false);
+        setEditText(message.message);
+      }
+
+      if (isAddingNote) {
+        setIsAddingNote(false);
+        setNoteText(message.note || '');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [shouldShowPopup, isOpen, isEditing, isAddingNote, message.message, message.note, onToggle]);
 
   const handleEdit = () => {
     if (editText.trim() && editText !== message.message) {
@@ -169,6 +184,7 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
         handleAddNote();
       }
     }
+
     if (e.key === 'Escape') {
       if (action === 'edit') {
         setIsEditing(false);
@@ -180,121 +196,102 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
     }
   };
 
-  if (isEditing) {
-    return (
-      <div ref={menuRef} className={`absolute ${popupPosition.horizontalPosition} ${popupPosition.horizontalMargin} ${popupPosition.verticalPosition} ${popupPosition.verticalMargin} bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-3 w-80 z-50`}>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-gray-900 dark:text-white">Edit Message</h4>
-          <button
-            onClick={() => {
-              setIsEditing(false);
-              setEditText(message.message);
-            }}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          >
-            <X className="w-4 h-4 text-gray-500" />
-          </button>
-        </div>
-        <textarea
-          value={editText}
-          onChange={(e) => setEditText(e.target.value)}
-          onKeyDown={(e) => handleKeyDown(e, 'edit')}
-          className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          rows={3}
-          autoFocus
-        />
-        <div className="flex items-center justify-end space-x-2 mt-2">
-          <button
-            onClick={() => {
-              setIsEditing(false);
-              setEditText(message.message);
-            }}
-            className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleEdit}
-            disabled={!editText.trim() || editText === message.message}
-            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center space-x-1"
-          >
-            <Save className="w-3 h-3" />
-            <span>Save</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (isAddingNote) {
-    return (
-      <div ref={menuRef} className={`absolute ${popupPosition.horizontalPosition} ${popupPosition.horizontalMargin} ${popupPosition.verticalPosition} ${popupPosition.verticalMargin} bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-3 w-80 z-50`}>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-sm font-medium text-gray-900 dark:text-white">Add Note</h4>
-          <button
-            onClick={() => {
-              setIsAddingNote(false);
-              setNoteText(message.note || '');
-            }}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          >
-            <X className="w-4 h-4 text-gray-500" />
-          </button>
-        </div>
-        <textarea
-          value={noteText}
-          onChange={(e) => setNoteText(e.target.value)}
-          onKeyDown={(e) => handleKeyDown(e, 'note')}
-          placeholder="Add a note to this message..."
-          className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          rows={3}
-          autoFocus
-        />
-        <div className="flex items-center justify-end space-x-2 mt-2">
-          <button
-            onClick={() => {
-              setIsAddingNote(false);
-              setNoteText(message.note || '');
-            }}
-            className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleAddNote}
-            disabled={!noteText.trim()}
-            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center space-x-1"
-          >
-            <StickyNote className="w-3 h-3" />
-            <span>Add Note</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isOpen) {
-    return (
+  const renderEditPopup = () => (
+    <div ref={menuRef} style={popupStyle} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-3 overflow-auto">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-medium text-gray-900 dark:text-white">Edit Message</h4>
         <button
-          ref={buttonRef}
-          onClick={onToggle}
-          className="p-1 rounded-full transition-colors opacity-0 group-hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700"
-          title="More options"
+          onClick={() => {
+            setIsEditing(false);
+            setEditText(message.message);
+          }}
+          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
         >
-          <MoreVertical className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
+          <X className="w-4 h-4 text-gray-500" />
         </button>
-    );
-  }
+      </div>
+      <textarea
+        value={editText}
+        onChange={(e) => setEditText(e.target.value)}
+        onKeyDown={(e) => handleKeyDown(e, 'edit')}
+        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        rows={3}
+        autoFocus
+      />
+      <div className="flex items-center justify-end space-x-2 mt-2">
+        <button
+          onClick={() => {
+            setIsEditing(false);
+            setEditText(message.message);
+          }}
+          className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleEdit}
+          disabled={!editText.trim() || editText === message.message}
+          className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center space-x-1"
+        >
+          <Save className="w-3 h-3" />
+          <span>Save</span>
+        </button>
+      </div>
+    </div>
+  );
 
-  return (
-    <div ref={menuRef} className={`absolute ${popupPosition.horizontalPosition} ${popupPosition.horizontalMargin} ${popupPosition.verticalPosition} ${popupPosition.verticalMargin} bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50 min-w-48`}>
-      {/* Main Actions */}
+  const renderAddNotePopup = () => (
+    <div ref={menuRef} style={popupStyle} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-3 overflow-auto">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-medium text-gray-900 dark:text-white">Add Note</h4>
+        <button
+          onClick={() => {
+            setIsAddingNote(false);
+            setNoteText(message.note || '');
+          }}
+          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+        >
+          <X className="w-4 h-4 text-gray-500" />
+        </button>
+      </div>
+      <textarea
+        value={noteText}
+        onChange={(e) => setNoteText(e.target.value)}
+        onKeyDown={(e) => handleKeyDown(e, 'note')}
+        placeholder="Add a note to this message..."
+        className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+        rows={3}
+        autoFocus
+      />
+      <div className="flex items-center justify-end space-x-2 mt-2">
+        <button
+          onClick={() => {
+            setIsAddingNote(false);
+            setNoteText(message.note || '');
+          }}
+          className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleAddNote}
+          disabled={!noteText.trim()}
+          className="px-3 py-1 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center space-x-1"
+        >
+          <StickyNote className="w-3 h-3" />
+          <span>Add Note</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderMainPopup = () => (
+    <div ref={menuRef} style={popupStyle} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 min-w-48 overflow-auto">
       <div className="px-3 py-1">
         <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
           Message Actions
         </div>
-        
-        {/* Reply */}
+
         <button
           onClick={() => {
             onReply(message);
@@ -306,7 +303,6 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
           <span>Reply</span>
         </button>
 
-        {/* React */}
         <button
           onClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -319,7 +315,6 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
           <span>React</span>
         </button>
 
-        {/* Edit (only for own messages) */}
         {isOwnMessage && (
           <button
             onClick={() => {
@@ -333,7 +328,6 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
           </button>
         )}
 
-        {/* Pin/Unpin */}
         <button
           onClick={() => {
             onPin(message, !message.isPinned);
@@ -345,7 +339,6 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
           <span>{message.isPinned ? 'Unpin' : 'Pin'}</span>
         </button>
 
-        {/* Add Note */}
         <button
           onClick={() => {
             setIsAddingNote(true);
@@ -358,16 +351,13 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
         </button>
       </div>
 
-      {/* Separator */}
       <div className="border-t border-gray-200 dark:border-gray-700 my-2"></div>
 
-      {/* Quick Actions */}
       <div className="px-3 py-1">
         <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
           Quick Actions
         </div>
-        
-        {/* Favorite */}
+
         <button
           onClick={() => {
             onToggleFavorite(message);
@@ -383,7 +373,6 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
           <span>{isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}</span>
         </button>
 
-        {/* Forward */}
         <button
           onClick={() => {
             onForward(message);
@@ -395,7 +384,6 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
           <span>Forward</span>
         </button>
 
-        {/* Delete (only for own messages) */}
         {isOwnMessage && (
           <button
             onClick={() => {
@@ -410,7 +398,6 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
         )}
       </div>
 
-      {/* Close button */}
       <div className="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
         <button
           onClick={onToggle}
@@ -421,5 +408,31 @@ export const MessageMenu: React.FC<MessageMenuProps> = ({
         </button>
       </div>
     </div>
+  );
+
+  const popupNode = isEditing
+    ? renderEditPopup()
+    : isAddingNote
+      ? renderAddNotePopup()
+      : isOpen
+        ? renderMainPopup()
+        : null;
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        onClick={onToggle}
+        className={`p-1 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 ${
+          shouldShowPopup ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}
+        title="More options"
+        type="button"
+      >
+        <MoreVertical className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
+      </button>
+
+      {isMounted && popupNode ? createPortal(popupNode, document.body) : null}
+    </>
   );
 };

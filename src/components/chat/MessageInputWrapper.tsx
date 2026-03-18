@@ -37,9 +37,10 @@ interface AssignableUserOption {
 
 const normalizeTemplateShortcut = (value: string): string =>
     value
-        .toLowerCase()
+        .normalize('NFKC')
+        .toLocaleLowerCase()
         .trim()
-        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/[^\p{L}\p{N}]+/gu, '-')
         .replace(/^-+|-+$/g, '');
 
 const isTemplateSlashCommand = (value: string): boolean =>

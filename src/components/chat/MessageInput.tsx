@@ -248,25 +248,27 @@ const MessageInput: React.FC<MessageInputProps> = ({
         </div>
 
         {showSlashMenu && slashMatches.length > 0 && (
-          <div className="absolute left-3 bottom-[100%] mb-2 z-40 w-[320px] max-w-[95vw] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-panel)] shadow-xl p-2" role="listbox" aria-label="Slash commands">
+          <div className="absolute left-3 bottom-[100%] mb-2 z-40 w-[360px] sm:w-[560px] max-w-[95vw] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-panel)] shadow-xl p-2" role="listbox" aria-label="Slash commands">
             <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-[var(--chat-muted)]">Commands</div>
-            {slashMatches.map((command, index) => (
-              <button
-                key={command.key}
-                type="button"
-                className={`w-full text-left rounded-md px-2 py-1.5 text-sm flex items-center justify-between ${index === activeSlashIndex ? 'bg-[var(--chat-accent-soft)] text-[var(--chat-text)]' : 'text-[var(--chat-muted)] hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  applySlashCommand(command.insert);
-                }}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Hash className="w-3.5 h-3.5" />
-                  <span className="font-medium">{command.key}</span>
-                </span>
-                <span className="text-xs opacity-70">{command.label}</span>
-              </button>
-            ))}
+            <div className="max-h-72 overflow-y-auto pr-1">
+              {slashMatches.map((command, index) => (
+                <button
+                  key={command.key}
+                  type="button"
+                  className={`w-full text-left rounded-md px-2 py-1.5 text-sm flex items-center justify-between gap-3 ${index === activeSlashIndex ? 'bg-[var(--chat-accent-soft)] text-[var(--chat-text)]' : 'text-[var(--chat-muted)] hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    applySlashCommand(command.insert);
+                  }}
+                >
+                  <span className="inline-flex items-center gap-2 min-w-0">
+                    <Hash className="w-3.5 h-3.5 shrink-0" />
+                    <span className="font-medium truncate">{command.key}</span>
+                  </span>
+                  <span className="text-xs opacity-70 truncate">{command.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
