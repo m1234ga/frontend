@@ -55,6 +55,7 @@ interface SocketContextType {
   onChatUpdate: (callback: (chat: Chat) => void) => void;
   onUserTyping: (callback: (data: { userId: string; isTyping: boolean; conversationId: string }) => void) => void;
   onChatPresence: (callback: (data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) => void;
+  onUserPresence: (callback: (data: { userId: string; isOnline: boolean; lastAliveAt?: number }) => void) => void;
   onReactionUpdate: (callback: (data: { messageId: string; reactions: MessageReaction[] }) => void) => void;
   emitTyping: (conversationId: string, isTyping: boolean) => void;
   forwardMessage: (originalMessage: ChatMessage, targetChatId: string, targetPhone: string) => void;
@@ -91,6 +92,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   const chatUpdateCallbackRef = useRef<((chat: Chat) => void) | null>(null);
   const userTypingCallbackRef = useRef<((data: { userId: string; isTyping: boolean; conversationId: string }) => void) | null>(null);
   const chatPresenceCallbackRef = useRef<((data: { chatId: string; userId: string; isOnline: boolean; isTyping: boolean }) => void) | null>(null);
+  const userPresenceCallbackRef = useRef<((data: { userId: string; isOnline: boolean; lastAliveAt?: number }) => void) | null>(null);
   const reactionUpdateCallbackRef = useRef<((data: { messageId: string; reactions: MessageReaction[] }) => void) | null>(null);
 
   useEffect(() => {
@@ -110,6 +112,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
       newSocket.on('connect', () => {
         setIsConnected(true);
         newSocket.emit('join', user.id);
+        newSocket.emit('alive');
       });
 
       newSocket.on('disconnect', () => {
@@ -164,15 +167,29 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         }
       });
 
+      newSocket.on('user_presence', (data: { userId: string; isOnline: boolean; lastAliveAt?: number }) => {
+        if (userPresenceCallbackRef.current) {
+          userPresenceCallbackRef.current(data);
+        }
+      });
+
       newSocket.on('reaction_updated', (data: { messageId: string; reactions: MessageReaction[] }) => {
         if (reactionUpdateCallbackRef.current) {
           reactionUpdateCallbackRef.current(data);
         }
       });
 
+      // Heartbeat for active logged-in user presence.
+      const aliveInterval = window.setInterval(() => {
+        if (newSocket.connected) {
+          newSocket.emit('alive');
+        }
+      }, 60 * 1000);
+
       setSocket(newSocket);
 
       return () => {
+        window.clearInterval(aliveInterval);
         newSocket.close();
         setTabUnread(0);
         chatUnreadMapRef.current.clear();
@@ -269,6 +286,10 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     chatPresenceCallbackRef.current = callback;
   }, []);
 
+  const onUserPresence = useCallback((callback: (data: { userId: string; isOnline: boolean; lastAliveAt?: number }) => void) => {
+    userPresenceCallbackRef.current = callback;
+  }, []);
+
   const onReactionUpdate = useCallback((callback: (data: { messageId: string; reactions: MessageReaction[] }) => void) => {
     reactionUpdateCallbackRef.current = callback;
   }, []);
@@ -284,6 +305,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     onChatUpdate,
     onUserTyping,
     onChatPresence,
+    onUserPresence,
     onReactionUpdate,
     emitTyping,
     forwardMessage,
@@ -300,6 +322,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     onChatUpdate,
     onUserTyping,
     onChatPresence,
+    onUserPresence,
     onReactionUpdate,
     emitTyping,
     forwardMessage,

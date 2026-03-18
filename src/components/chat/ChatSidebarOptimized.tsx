@@ -145,7 +145,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
 }) => {
     const serverPageSize = 200;
     const { user, token } = useAuth();
-    const { onChatUpdate, onChatPresence, sendMessage } = useSocket();
+    const { onChatUpdate, onChatPresence, onUserPresence, sendMessage } = useSocket();
     const chatRouter = useMemo(() => Chat(token || ""), [token]);
 
     // Zustand Store
@@ -243,7 +243,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
 
     // Socket listeners
     useEffect(() => {
-        if (!onChatUpdate || !onChatPresence) return;
+        if (!onChatUpdate || !onChatPresence || !onUserPresence) return;
 
         const handleUpdate = (updatedChat: ChatUpdateEvent) => {
             const normalizedUnread = updatedChat.unread_count
@@ -313,9 +313,19 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
             updateConversation(data.chatId, { isOnline: data.isOnline, isTyping: data.isTyping });
         };
 
+        const handleUserPresence = (data: { userId: string; isOnline: boolean }) => {
+            const currentConversations = latestConversationsRef.current;
+            currentConversations.forEach((conversation) => {
+                if (String(conversation.assignedTo || '') === String(data.userId || '')) {
+                    updateConversation(conversation.id, { isOnline: data.isOnline });
+                }
+            });
+        };
+
         onChatUpdate(handleUpdate);
         onChatPresence(handlePresence);
-    }, [onChatUpdate, onChatPresence, updateConversation, addConversation]);
+        onUserPresence(handleUserPresence);
+    }, [onChatUpdate, onChatPresence, onUserPresence, updateConversation, addConversation]);
 
     useEffect(() => {
         if (activeTab !== 'contacts') return;
