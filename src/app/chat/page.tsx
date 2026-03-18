@@ -58,6 +58,44 @@ const normalizeMessages = (items: ChatMessage[]): ChatMessage[] => {
   return unique;
 };
 
+const normalizeMessageId = (value: unknown): string => String(value ?? '').trim();
+
+const decodeMaybeUriComponent = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const resolveReactionMessageId = (data: { messageId?: string; reactions?: MessageReaction[] }): string => {
+  const directId = normalizeMessageId(data.messageId);
+  if (directId) return directId;
+  const nestedId = normalizeMessageId(data.reactions?.[0]?.messageId);
+  return nestedId;
+};
+
+const normalizeChatKey = (value: unknown): string => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (!raw) return '';
+  return raw.replace(/@[^@]+$/, '');
+};
+
+const isReactionForSelectedConversation = (payloadChatId: string, conversation: ChatModel | null): boolean => {
+  if (!conversation) return false;
+
+  const payloadKey = normalizeChatKey(payloadChatId);
+  if (!payloadKey) return false;
+
+  const selectedKeys = [
+    normalizeChatKey(conversation.id),
+    normalizeChatKey(conversation.phone),
+    normalizeChatKey(conversation.contactId),
+  ].filter(Boolean);
+
+  return selectedKeys.includes(payloadKey);
+};
+
 const stripSendingSuffix = (value?: string) => value?.replace(' (Sending...)', '') || value;
 
 const mergeMessage = (base: ChatMessage, incoming: IncomingMessage, overrideId?: string): ChatMessage => ({
@@ -266,13 +304,42 @@ function ChatPageInner() {
     ));
   }, []);
 
-  const handleReactionUpdate = useCallback((data: { messageId: string; reactions: MessageReaction[] }) => {
-    setMessages(prev => normalizeMessages(prev.map(msg =>
-      msg.id === data.messageId
-        ? { ...msg, reactions: data.reactions }
-        : msg
-    )));
-  }, []);
+  const handleReactionUpdate = useCallback((data: { messageId?: string; reactions: MessageReaction[]; chatId?: string }) => {
+    debugger;
+    const targetRaw = resolveReactionMessageId(data);
+    if (!targetRaw) return;
+
+    const targetDecoded = decodeMaybeUriComponent(targetRaw);
+    const targetLower = targetRaw.toLowerCase();
+    const targetDecodedLower = targetDecoded.toLowerCase();
+    const belongsToSelectedConversation = isReactionForSelectedConversation(String(data.chatId?.split(':')[0] || ''), selectedConversation);
+
+    setMessages(prev => {
+      let matched = false;
+
+      const next = prev.map((msg) => {
+        const msgId = normalizeMessageId(msg.id);
+        const msgLower = msgId.toLowerCase();
+        const isMatch =
+          msgId === targetRaw ||
+          msgId === targetDecoded ||
+          msgLower === targetLower ||
+          msgLower === targetDecodedLower;
+
+        if (!isMatch) return msg;
+        matched = true;
+        return { ...msg, reactions: data.reactions };
+      });
+
+      // Accept only selected-conversation updates, unless payload chatId is mismatched
+      // but the message id clearly exists in the currently loaded chat messages.
+      if (!belongsToSelectedConversation && !matched) {
+        return prev;
+      }
+
+      return matched ? normalizeMessages(next) : prev;
+    });
+  }, [selectedConversation]);
 
   // Set up Socket.IO event listeners
   useEffect(() => {
