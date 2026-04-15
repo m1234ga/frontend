@@ -779,6 +779,51 @@ export default function Chat(token: string) {
     }
   }
 
+  async function UpdateMessageTemplate(id: string, name: string, content: string) {
+    try {
+      const response = await fetch(apiUrl + `/UpdateMessageTemplate/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name, content })
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to update message template');
+      }
+    } catch (error) {
+      console.error('Error updating template:', error);
+      throw error;
+    }
+  }
+
+  async function DeleteMessageTemplate(id: string) {
+    try {
+      const response = await fetch(apiUrl + `/DeleteMessageTemplate/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to delete message template');
+      }
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      throw error;
+    }
+  }
+
   // Message operations
   async function ForwardMessage(originalMessage: ChatMessage, targetChatId: string, senderId: string) {
     try {
@@ -1140,6 +1185,8 @@ export default function Chat(token: string) {
     AssignChat,
     GetMessageTemplates,
     CreateMessageTemplate,
+    UpdateMessageTemplate,
+    DeleteMessageTemplate,
     ForwardMessage,
     ReplyToMessage,
     EditMessage,

@@ -13,7 +13,8 @@ import {
   Users,
   UserRound,
   Home,
-  TrendingUp
+  TrendingUp,
+  FileText
 } from 'lucide-react';
 
 export const LeftNavbar = () => {
@@ -52,6 +53,13 @@ export const LeftNavbar = () => {
       label: 'Contacts',
       path: '/contacts',
       color: 'text-cyan-500',
+      requiresAdmin: true
+    },
+    {
+      icon: FileText,
+      label: 'Templates',
+      path: '/templates',
+      color: 'text-amber-500',
       requiresAdmin: true
     },
     {
