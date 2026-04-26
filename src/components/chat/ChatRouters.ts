@@ -152,6 +152,27 @@ export default function Chat(token: string) {
     }
   }
 
+  async function GetUserLid(phone: string) {
+    try {
+      const response = await fetch(`${apiUrl}/GetUserLid/${encodeURIComponent(phone)}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error fetching user LID:', error);
+      return null;
+    }
+  }
+
   // Session actions
   async function GetSessionStatus() {
     const response = await fetch(`${apiUrl}/settings/session/status`, {
@@ -1206,6 +1227,7 @@ export default function Chat(token: string) {
     RefreshChatAvatar,
     GetWuzUserInfo,
     GetWuzProfile,
+    GetUserLid,
     GetSessionStatus,
     ConnectSession,
     DisconnectSession,

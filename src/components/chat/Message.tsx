@@ -36,7 +36,29 @@ const formatTime = (dateInput?: string | number | Date) => {
   });
 };
 
+const formatDateTimeShort = (dateInput?: string | number | Date) => {
+  if (!dateInput) return '';
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 const getMessageTime = (message: ChatMessage) => message.timeStamp ?? message.timestamp;
+
+const getEditHistoryEntries = (message: ChatMessage) => {
+  const historyItems = Array.isArray(message.editHistory) ? message.editHistory : [];
+  const originalFallback = message.note
+    ? [{ id: 'legacy-note', oldMessage: message.note, newMessage: message.message, editedAt: message.editedAt || message.timestamp || message.timeStamp }]
+    : [];
+
+  return historyItems.length > 0 ? historyItems : originalFallback;
+};
 
 const getAttachmentLabel = (message: ChatMessage) => {
   if (message.message && message.message !== '[Document]' && message.message !== '[Media]') {
@@ -88,12 +110,35 @@ const TimeStatus = ({
   </span>
 );
 
-const TextMessageContent = ({ message, isOwnMessage }: { message: ChatMessage; isOwnMessage: boolean }) => (
-      <div className="flex flex-col gap-1">
-        <p className="text-[15px] leading-[1.35] break-words whitespace-pre-wrap">{message.message}</p>
-        <TimeStatus message={message} isOwnMessage={isOwnMessage} className="self-end" />
-  </div>
-);
+const TextMessageContent = ({
+  message,
+  isOwnMessage,
+  onOpenEditHistory
+}: {
+  message: ChatMessage;
+  isOwnMessage: boolean;
+  onOpenEditHistory: () => void;
+}) => {
+  const effectiveHistory = getEditHistoryEntries(message);
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <p className="text-[15px] leading-[1.35] break-words whitespace-pre-wrap">{message.message}</p>
+      {message.isEdit && effectiveHistory.length > 0 && (
+        <button
+          type="button"
+          onClick={onOpenEditHistory}
+          className={`self-start mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide transition-colors ${isOwnMessage ? 'bg-white/18 text-white/90 hover:bg-white/28' : 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100 dark:bg-cyan-900/30 dark:text-cyan-300 dark:hover:bg-cyan-900/50'}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+          Edited
+          <span className="opacity-70">{effectiveHistory.length}</span>
+        </button>
+      )}
+      <TimeStatus message={message} isOwnMessage={isOwnMessage} className="self-end" />
+    </div>
+  );
+};
 
 const ImageMessageContent = ({
   message,
@@ -387,17 +432,19 @@ const MessageContent = ({
   isOwnMessage,
   buildMediaUrl,
   onOpenImage,
-  onOpenContact
+  onOpenContact,
+  onOpenEditHistory
 }: {
   message: ChatMessage;
   isOwnMessage: boolean;
   buildMediaUrl: (primary?: string, fallback?: string) => string;
   onOpenImage: () => void;
   onOpenContact: (message: ChatMessage) => void;
+  onOpenEditHistory: () => void;
 }) => {
   switch (message.messageType) {
     case 'text':
-      return <TextMessageContent message={message} isOwnMessage={isOwnMessage} />;
+      return <TextMessageContent message={message} isOwnMessage={isOwnMessage} onOpenEditHistory={onOpenEditHistory} />;
     case 'image':
       return <ImageMessageContent message={message} isOwnMessage={isOwnMessage} buildMediaUrl={buildMediaUrl} onPreview={onOpenImage} />;
     case 'audio':
@@ -516,7 +563,7 @@ const ReplyBlock = ({ message, isOwnMessage }: { message: ChatMessage; isOwnMess
 };
 
 const NoteBlock = ({ message, isOwnMessage }: { message: ChatMessage; isOwnMessage: boolean }) => {
-  if (!message.note) return null;
+  if (!message.note || message.isEdit) return null;
 
   return (
         <div className={`mb-1 p-2 rounded-xl text-sm border-l-4 ${isOwnMessage ? 'bg-white/10 border-yellow-300 text-white/90' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-gray-700 dark:text-gray-200'}`}>
@@ -533,7 +580,8 @@ const MessageBubble = ({
   showName,
   buildMediaUrl,
   onOpenImage,
-  onOpenContact
+  onOpenContact,
+  onOpenEditHistory
 }: {
   message: ChatMessage;
   isOwnMessage: boolean;
@@ -542,6 +590,7 @@ const MessageBubble = ({
   buildMediaUrl: (primary?: string, fallback?: string) => string;
   onOpenImage: () => void;
   onOpenContact: (message: ChatMessage) => void;
+  onOpenEditHistory: () => void;
 }) => {
   const displayName = isOwnMessage
     ? (message.sender || 'user')
@@ -586,6 +635,7 @@ const MessageBubble = ({
       buildMediaUrl={buildMediaUrl}
       onOpenImage={onOpenImage}
       onOpenContact={onOpenContact}
+      onOpenEditHistory={onOpenEditHistory}
     />
     <Reactions message={message} currentUserId={currentUserId} />
   </div>
@@ -610,8 +660,10 @@ export function Message({
 }: MessageProps) {
   const isOwnMessage = message.isFromMe;
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isEditHistoryOpen, setIsEditHistoryOpen] = useState(false);
   const [activeContact, setActiveContact] = useState<ParsedContactDetails | null>(null);
   const [draftMessage, setDraftMessage] = useState('');
+  const editHistoryEntries = getEditHistoryEntries(message);
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/';
   const buildMediaUrl = (primary?: string, fallback?: string) => {
     const pick = primary || fallback || '';
@@ -681,6 +733,7 @@ export function Message({
           buildMediaUrl={buildMediaUrl}
           onOpenImage={() => setIsImageModalOpen(true)}
           onOpenContact={handleOpenContactDetails}
+          onOpenEditHistory={() => setIsEditHistoryOpen(true)}
         />
 
         {!isOwnMessage && (
@@ -769,6 +822,51 @@ export function Message({
           </div>
         </div>
       )}
+
+      {isEditHistoryOpen && message.isEdit && editHistoryEntries.length > 0 && (
+        <>
+          <div
+            className="fixed inset-0 z-[72] bg-black/40 backdrop-blur-sm"
+            onClick={() => setIsEditHistoryOpen(false)}
+          />
+          <aside className="fixed right-0 top-0 z-[73] h-full w-full max-w-md border-l border-[var(--chat-border)] bg-[var(--chat-panel)] shadow-2xl">
+            <div className="flex h-full flex-col">
+              <div className="flex items-center justify-between border-b border-[var(--chat-border)] px-4 py-3">
+                <div>
+                  <p className="text-xs text-[var(--chat-muted)]">Full history</p>
+                  <h3 className="text-sm font-semibold text-[var(--chat-text)]">Edited Message</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditHistoryOpen(false)}
+                  className="rounded-md px-2 py-1 text-xs border border-[var(--chat-border)] text-[var(--chat-muted)] hover:bg-black/5"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="px-4 py-3 border-b border-[var(--chat-border)]">
+                <p className="text-xs text-[var(--chat-muted)] mb-1">Current message</p>
+                <div className="rounded-lg border border-[var(--chat-border)] bg-[var(--chat-bg-soft)] px-3 py-2 text-sm whitespace-pre-wrap break-words text-[var(--chat-text)]">
+                  {message.message}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {editHistoryEntries.map((entry, index) => (
+                  <div key={String(entry.id)} className="rounded-lg border border-[var(--chat-border)] bg-[var(--chat-bg-soft)] px-3 py-2">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-[11px] font-semibold text-[var(--chat-muted)]">Version {editHistoryEntries.length - index}</span>
+                      <span className="text-[11px] text-[var(--chat-muted)]">{formatDateTimeShort(entry.editedAt)}</span>
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap break-words text-[var(--chat-text)]">{entry.oldMessage}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
     </>
   );
 }
@@ -778,6 +876,9 @@ export const MemoizedMessage = memo(Message, (prevProps, nextProps) => {
     prevProps.message.id === nextProps.message.id &&
     prevProps.message.timeStamp === nextProps.message.timeStamp &&
     prevProps.message.message === nextProps.message.message &&
+    prevProps.message.isEdit === nextProps.message.isEdit &&
+    prevProps.message.note === nextProps.message.note &&
+    prevProps.message.editHistory === nextProps.message.editHistory &&
     prevProps.message.reactions === nextProps.message.reactions &&
     prevProps.isFavorite === nextProps.isFavorite &&
     prevProps.isMenuOpen === nextProps.isMenuOpen &&

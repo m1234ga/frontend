@@ -5,7 +5,7 @@ import { Contact } from '../../../../Shared/Models';
 interface NewChatModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateChat: (phoneNumber: string, message: string) => void;
+  onCreateChat: (phoneNumber: string, message: string) => Promise<void> | void;
   contacts?: Contact[];
 }
 

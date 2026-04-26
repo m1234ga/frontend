@@ -540,11 +540,22 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         }
     };
 
-    const handleCreateChat = useCallback((phoneNumber: string, initialMessage?: string) => {
+    const handleCreateChat = useCallback(async (phoneNumber: string, initialMessage?: string) => {
         if (!user?.id || !sendMessage) return;
 
+        let chatId = phoneNumber;
+        try {
+            const lidResult = await chatRouter.GetUserLid(phoneNumber) as { lid?: string } | null;
+            const resolvedLid = String(lidResult?.lid || '').trim().split('@')[0];
+            if (resolvedLid) {
+                chatId = resolvedLid;
+            }
+        } catch (error) {
+            console.warn('Failed to resolve LID for new chat, using phone as fallback:', error);
+        }
+
         const mockChat: ChatModel = {
-            id: phoneNumber,
+            id: chatId,
             name: phoneNumber,
             phone: phoneNumber,
             contactId: phoneNumber,
@@ -566,7 +577,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         if (initialMessage?.trim()) {
             sendMessage({
                 id: Date.now().toString(),
-                chatId: phoneNumber,
+                chatId,
                 message: initialMessage.trim(),
                 timeStamp: new Date(),
                 isEdit: false,
@@ -580,7 +591,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                 pushName: user.username || 'Agent'
             });
         }
-    }, [user, sendMessage, addConversation, onSelectConversation]);
+    }, [user, sendMessage, addConversation, onSelectConversation, chatRouter]);
 
     const handleArchive = useCallback(async (chatId: string) => {
         if (!user?.id) return;

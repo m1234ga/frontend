@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Smile, Image as ImageIcon, Mic, Video, Send, Plus, Paperclip, Slash, Command, Hash } from 'lucide-react';
+import { Smile, Image as ImageIcon, Mic, Video, Send, Plus, Paperclip, Slash, Command, Hash, FileText, X } from 'lucide-react';
 
 interface MessageInputProps {
   newMessage: string;
@@ -21,6 +21,8 @@ interface MessageInputProps {
     label: string;
     insert: string;
   }>;
+  activeTemplateName?: string | null;
+  onClearTemplateName?: () => void;
 }
 
 const QUICK_EMOJIS = ['😀', '👍', '🔥', '🎉', '🙏', '✅', '👀', '💡'];
@@ -56,7 +58,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
   onStopRecording,
   isRecording,
   onOpenTemplates,
-  templateShortcuts = []
+  templateShortcuts = [],
+  activeTemplateName,
+  onClearTemplateName
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
@@ -182,6 +186,31 @@ const MessageInput: React.FC<MessageInputProps> = ({
           <span className="opacity-40">|</span>
           <span className="inline-flex items-center gap-1"><Slash className="w-3 h-3" /> slash commands</span>
         </div>
+
+        {activeTemplateName && (
+          <div className="mb-2.5 rounded-lg border border-[var(--chat-border)] bg-slate-50/90 dark:bg-slate-900/70 px-2.5 py-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 inline-flex items-center gap-2 text-[12px] text-[var(--chat-muted)]">
+                <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--chat-text)]">
+                  <FileText className="w-3.5 h-3.5" />
+                  Template
+                </span>
+                <span className="truncate rounded-md bg-white/80 dark:bg-slate-800 px-2 py-0.5 border border-[var(--chat-border)] text-[var(--chat-text)]">
+                  {activeTemplateName}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={onClearTemplateName}
+                className="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-[var(--chat-muted)]"
+                aria-label="Clear selected template"
+                title="Clear selected template"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-end gap-1.5">
           <button

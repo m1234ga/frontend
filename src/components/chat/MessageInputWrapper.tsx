@@ -46,21 +46,6 @@ const normalizeTemplateShortcut = (value: string): string =>
 const isTemplateSlashCommand = (value: string): boolean =>
     /^\/(?:template|templates|tpl)(?:\s|$)|^\/t(?:\s|$)/i.test(value.trim());
 
-const readBlobAsBase64 = (blob: Blob): Promise<string> =>
-    new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const result = typeof reader.result === 'string' ? reader.result.split(',')[1] : '';
-            if (!result) {
-                reject(new Error('Failed to read template media'));
-                return;
-            }
-            resolve(result);
-        };
-        reader.onerror = () => reject(reader.error || new Error('Failed to read template media'));
-        reader.readAsDataURL(blob);
-    });
-
 interface MessageInputWrapperProps {
     onSend: (content: string) => void;
     replyToMessage?: ChatMessage | null;
@@ -86,6 +71,7 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
 }) => {
     const chatRouter = useChatApi();
     const [newMessage, setNewMessage] = useState('');
+    const [activeTemplateName, setActiveTemplateName] = useState<string | null>(null);
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [templates, setTemplates] = useState<MessageTemplate[]>([]);
     const [tags, setTags] = useState<ChatTagOption[]>([]);
@@ -227,57 +213,15 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
         }
     }, [assignableUsers, chatRouter]);
 
-    const sendTemplate = useCallback(async (template: MessageTemplate) => {
-        if (!socket) {
-            toast.error('Unable to send template right now');
-            return;
+    const loadTemplateIntoComposer = useCallback((template: MessageTemplate) => {
+        setNewMessage(template.content || '');
+        setActiveTemplateName(template.name || null);
+        if (template.imageUrl || template.mediaPath) {
+            toast('Loaded template text only. Media is not inserted into the composer.');
+        } else {
+            toast.success('Template loaded. Edit before sending.');
         }
-
-        const targetPhone = normalizeOutgoingPhone(selectedConversation.id, selectedConversation.phone);
-        const baseMessage = {
-            id: Date.now().toString(),
-            chatId: selectedConversation.id,
-            phone: targetPhone,
-            message: template.content,
-            messageType: 'text' as const,
-            isFromMe: true,
-            replyToMessageId: replyToMessage?.id,
-            timestamp: new Date().toISOString(),
-        };
-
-        try {
-            if (template.imageUrl) {
-                const response = await fetch(template.imageUrl);
-                if (!response.ok) {
-                    throw new Error('Failed to fetch template image');
-                }
-
-                const imageData = await readBlobAsBase64(await response.blob());
-                socket.emit('send_image', {
-                    message: {
-                        ...baseMessage,
-                        messageType: 'image' as const,
-                    },
-                    imageData,
-                    filename: `template_${template.id}_${Date.now()}.jpg`,
-                });
-            } else {
-                if (template.mediaPath) {
-                    toast('Template media was not available, sent as text');
-                }
-                socket.emit('send_message', baseMessage);
-            }
-
-            if (replyToMessage) {
-                onCancelReply?.();
-            }
-            toast.success('Template sent');
-        } catch (error) {
-            console.error('Error sending template:', error);
-            toast.error('Failed to send template');
-            throw error;
-        }
-    }, [onCancelReply, replyToMessage, selectedConversation.id, selectedConversation.phone, socket]);
+    }, []);
 
     const templateShortcuts = useMemo(
         () => templates
@@ -342,9 +286,9 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
             return true;
         }
 
-        await sendTemplate(template);
+        loadTemplateIntoComposer(template);
         return true;
-    }, [ensureTemplatesLoaded, sendTemplate]);
+    }, [ensureTemplatesLoaded, loadTemplateIntoComposer]);
 
     useEffect(() => {
         void ensureTemplatesLoaded();
@@ -387,7 +331,6 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
                     if (!handled) {
                         return;
                     }
-                    setNewMessage('');
                     emitTyping(selectedConversation.id, false);
                 })
                 .catch(() => {
@@ -525,6 +468,7 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
 
         onSend(trimmed);
         setNewMessage('');
+        setActiveTemplateName(null);
         emitTyping(selectedConversation.id, false);
     };
 
@@ -867,7 +811,12 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
             ) : (
                 <MessageInput
                     newMessage={newMessage}
-                    onChange={setNewMessage}
+                    onChange={(value) => {
+                        setNewMessage(value);
+                        if (!value.trim()) {
+                            setActiveTemplateName(null);
+                        }
+                    }}
                     onSend={handleSend}
                     onTypingChange={handleTypingChange}
                     onAttachImage={handleAttachImage}
@@ -878,9 +827,12 @@ export const MessageInputWrapper: React.FC<MessageInputWrapperProps> = ({
                     isRecording={false} // We handle recording UI separately now
                     onOpenTemplates={() => {
                         setNewMessage('/template ');
+                        setActiveTemplateName(null);
                         onOpenTemplates?.();
                     }}
                     templateShortcuts={slashShortcuts}
+                    activeTemplateName={activeTemplateName}
+                    onClearTemplateName={() => setActiveTemplateName(null)}
                 />
             )}
         </div>
