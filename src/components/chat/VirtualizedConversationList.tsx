@@ -93,6 +93,7 @@ export const VirtualizedConversationList: React.FC<VirtualizedConversationListPr
     onLoadMore
 }) => {
     const lastRequestedIndexRef = useRef(-1);
+    const userScrolledRef = useRef(false);
 
     const itemData = useMemo(() => ({
         conversations,
@@ -118,9 +119,17 @@ export const VirtualizedConversationList: React.FC<VirtualizedConversationListPr
         formatTime
     ]);
 
+    const handleScroll = useCallback(() => {
+        userScrolledRef.current = true;
+    }, []);
+
     const handleRowsRendered = useCallback((visibleRows: { startIndex: number; stopIndex: number }) => {
         if (!hasMore || !onLoadMore || conversations.length === 0) {
             lastRequestedIndexRef.current = -1;
+            return;
+        }
+
+        if (!userScrolledRef.current) {
             return;
         }
 
@@ -134,6 +143,7 @@ export const VirtualizedConversationList: React.FC<VirtualizedConversationListPr
         }
 
         lastRequestedIndexRef.current = conversations.length;
+        userScrolledRef.current = false;
         onLoadMore();
     }, [conversations.length, hasMore, onLoadMore]);
 
@@ -154,6 +164,7 @@ export const VirtualizedConversationList: React.FC<VirtualizedConversationListPr
                 rowProps={{ data: itemData }}
                 overscanCount={5}
                 className="no-scrollbar"
+                onScroll={handleScroll}
                 onRowsRendered={handleRowsRendered}
                 rowComponent={Row}
             />

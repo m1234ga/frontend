@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { SidebarHeader } from './SidebarHeader';
 import { SidebarActions } from './SidebarActions';
 import { SidebarSearch } from './SidebarSearch';
@@ -177,6 +177,11 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
     const [contactTypeFilter, setContactTypeFilter] = useState<'all' | 'contact' | 'lead'>('all');
     const [contactSortBy, setContactSortBy] = useState<'name' | 'phone'>('name');
     const [contactSearchTerm, setContactSearchTerm] = useState('');
+    const conversationsRef = useRef<ChatModel[]>([]);
+
+    useEffect(() => {
+        conversationsRef.current = conversations;
+    }, [conversations]);
 
     // Server-side conversation pagination by tab
     useEffect(() => {
@@ -207,9 +212,10 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                 if (serverPage === 1) {
                     setConversations(normalized);
                 } else {
+                    const currentConversations = conversationsRef.current;
                     const merged = [
-                        ...conversations,
-                        ...normalized.filter((conversation) => !conversations.some((existing) => existing.id === conversation.id))
+                        ...currentConversations,
+                        ...normalized.filter((conversation) => !currentConversations.some((existing: ChatModel) => existing.id === conversation.id))
                     ];
                     setConversations(merged);
                 }
@@ -227,7 +233,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         return () => {
             cancelled = true;
         };
-    }, [token, activeTab, serverPage, serverPageSize, chatRouter, setConversations, conversations]);
+    }, [token, activeTab, serverPage, serverPageSize, chatRouter, setConversations]);
 
     // Socket listeners
     useEffect(() => {
