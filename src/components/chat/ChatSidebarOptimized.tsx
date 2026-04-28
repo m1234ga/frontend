@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SidebarHeader } from './SidebarHeader';
 import { SidebarActions } from './SidebarActions';
 import { SidebarSearch } from './SidebarSearch';
@@ -81,17 +81,9 @@ const normalizeChatTags = (source: unknown): ChatTag[] => {
     const normalized: ChatTag[] = [];
     values.forEach((value, index) => {
         const tag = value as string;
-        const id=tag.split('_-_')[1];
-        const name=tag.split('_-_')[0];
-        debugger;
-        const rawName = String(name?? '').trim();
-        const rawId = String(id?? '').trim();
-
-        const parsedFromName = parseCombinedTag(tag);
-        const parsedFromId = parseCombinedTag(tag);
-
-        const tagName = (parsedFromName?.name || rawName || parsedFromId?.name || 'Tag').trim();
-        const tagId = (rawId || parsedFromName?.id || parsedFromId?.id || `${index + 1}`).trim();
+        const parsed = parseCombinedTag(tag);
+        const tagName = (parsed?.name || 'Tag').trim();
+        const tagId = (parsed?.id || `${index + 1}`).trim();
 
         normalized.push({
             tagId,
@@ -185,11 +177,6 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
     const [contactTypeFilter, setContactTypeFilter] = useState<'all' | 'contact' | 'lead'>('all');
     const [contactSortBy, setContactSortBy] = useState<'name' | 'phone'>('name');
     const [contactSearchTerm, setContactSearchTerm] = useState('');
-    const latestConversationsRef = useRef<ChatModel[]>([]);
-
-    useEffect(() => {
-        latestConversationsRef.current = conversations;
-    }, [conversations]);
 
     // Server-side conversation pagination by tab
     useEffect(() => {
@@ -217,14 +204,15 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
                 const chats = Array.isArray(rawChats) ? rawChats : [];
                 const normalized = chats.map((conv) => normalizeConversation(conv as ChatModel));
 
-                const merged = serverPage === 1
-                    ? normalized
-                    : [
-                        ...latestConversationsRef.current,
-                        ...normalized.filter((conversation) => !latestConversationsRef.current.some((existing) => existing.id === conversation.id))
+                if (serverPage === 1) {
+                    setConversations(normalized);
+                } else {
+                    const merged = [
+                        ...conversations,
+                        ...normalized.filter((conversation) => !conversations.some((existing) => existing.id === conversation.id))
                     ];
-
-                setConversations(merged);
+                    setConversations(merged);
+                }
                 setHasMoreServerPages(chats.length >= serverPageSize);
             })
             .catch((error) => {
@@ -239,7 +227,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         return () => {
             cancelled = true;
         };
-    }, [token, activeTab, serverPage, serverPageSize, chatRouter, setConversations]);
+    }, [token, activeTab, serverPage, serverPageSize, chatRouter, setConversations, conversations]);
 
     // Socket listeners
     useEffect(() => {
@@ -264,7 +252,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
             const normalizedLastMessage = String(updatedChat.lastMessage || '');
             const normalizedLastMessageTime = updatedChat.lastMessageTime || new Date();
 
-            const exists = latestConversationsRef.current.some((conversation) => conversation.id === updatedChat.id);
+            const exists = conversations.some((conversation) => conversation.id === updatedChat.id);
             if (!exists) {
                 addConversation(normalizeConversation({
                     id: updatedChat.id,
@@ -314,8 +302,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         };
 
         const handleUserPresence = (data: { userId: string; isOnline: boolean }) => {
-            const currentConversations = latestConversationsRef.current;
-            currentConversations.forEach((conversation) => {
+            conversations.forEach((conversation) => {
                 if (String(conversation.assignedTo || '') === String(data.userId || '')) {
                     updateConversation(conversation.id, { isOnline: data.isOnline });
                 }
@@ -325,7 +312,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         onChatUpdate(handleUpdate);
         onChatPresence(handlePresence);
         onUserPresence(handleUserPresence);
-    }, [onChatUpdate, onChatPresence, onUserPresence, updateConversation, addConversation]);
+    }, [onChatUpdate, onChatPresence, onUserPresence, updateConversation, addConversation, conversations]);
 
     useEffect(() => {
         if (activeTab !== 'contacts') return;
@@ -372,16 +359,20 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         };
     }, [activeTab, chatRouter]);
 
-    // Filtering Logic
+    // Filtering Logic - Optimized with early returns
     const filteredConversations = useMemo(() => {
-        let result = [...conversations];
+        let result = conversations;
 
-        // Filter by tab
-        if (activeTab === 'open') result = result.filter(c => c.status === 'open');
-        else if (activeTab === 'closed') result = result.filter(c => c.status === 'closed');
-        else if (activeTab === 'assigned') result = result.filter(c => c.assignedTo === user?.id);
-        else if (activeTab === 'archived') result = result.filter(c => c.isArchived);
-        else if (activeTab === 'favorites') {
+        // Filter by tab first (fastest)
+        if (activeTab === 'open') {
+            result = result.filter(c => c.status === 'open');
+        } else if (activeTab === 'closed') {
+            result = result.filter(c => c.status === 'closed');
+        } else if (activeTab === 'assigned') {
+            result = result.filter(c => c.assignedTo === user?.id);
+        } else if (activeTab === 'archived') {
+            result = result.filter(c => c.isArchived);
+        } else if (activeTab === 'favorites') {
             const favoriteIdsString = localStorage.getItem('favoriteMessages');
             let favoriteChatIds: string[] = [];
             try {
@@ -392,11 +383,19 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
             } catch {
                 favoriteChatIds = [];
             }
-            // This is a rough filter as we don't have global favorite messages search yet
             result = result.filter(c => favoriteChatIds.includes(c.id));
         }
 
-        // Filter by search
+        // Quick filters before search
+        if (filters.unreadOnly) result = result.filter(c => (c.unreadCount || 0) > 0);
+        if (filters.onlineOnly) result = result.filter(c => c.isOnline);
+
+        // Filter by tag before search
+        if (selectedTagId) {
+            result = result.filter(c => c.tags?.some(t => t.tagId === selectedTagId));
+        }
+
+        // Search last (most expensive)
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
             const safeIncludes = (value: unknown, query: string) => String(value ?? '').toLowerCase().includes(query);
@@ -407,24 +406,17 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
             );
         }
 
-        // Filter by tag
-        if (selectedTagId) {
-            result = result.filter(c => c.tags?.some(t => t.tagId === selectedTagId));
+        // Single sort operation
+        if (result.length > 1) {
+            result = result.slice().sort((a, b) => {
+                if (filters.sortBy === 'name') return a.name.localeCompare(b.name);
+                if (filters.sortBy === 'unread') return (b.unreadCount || 0) - (a.unreadCount || 0);
+
+                const timeA = new Date(a.lastMessageTime).getTime();
+                const timeB = new Date(b.lastMessageTime).getTime();
+                return timeB - timeA;
+            });
         }
-
-        // Quick filters
-        if (filters.unreadOnly) result = result.filter(c => (c.unreadCount || 0) > 0);
-        if (filters.onlineOnly) result = result.filter(c => c.isOnline);
-
-        // Sorting
-        result.sort((a, b) => {
-            if (filters.sortBy === 'name') return a.name.localeCompare(b.name);
-            if (filters.sortBy === 'unread') return (b.unreadCount || 0) - (a.unreadCount || 0);
-
-            const timeA = new Date(a.lastMessageTime).getTime();
-            const timeB = new Date(b.lastMessageTime).getTime();
-            return timeB - timeA;
-        });
 
         return result;
     }, [conversations, activeTab, searchTerm, selectedTagId, filters, user?.id]);
@@ -646,9 +638,7 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         setActiveTab(tab);
         setServerPage(1);
         setHasMoreServerPages(false);
-        latestConversationsRef.current = [];
-        setConversations([]);
-    }, [setConversations]);
+    }, []);
 
     const handleLoadMoreConversations = useCallback(() => {
         if (activeTab === 'contacts' || isServerLoading || !hasMoreServerPages) {
