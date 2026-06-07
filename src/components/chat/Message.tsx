@@ -463,7 +463,7 @@ const MessageContent = ({
     case 'poll':
       return <PollMessageContent message={message} isOwnMessage={isOwnMessage} />;
     default:
-      return <TextMessageContent message={message} isOwnMessage={isOwnMessage} />;
+      return <TextMessageContent message={message} isOwnMessage={isOwnMessage} onOpenEditHistory={onOpenEditHistory} />;
   }
 };
 
