@@ -10,7 +10,7 @@ import { useConversationStore } from '@/store/conversationStore';
 import { useChatApi } from '@/hooks/useChatData';
 import { Chat as ChatModel, ChatMessage, MessageReaction } from '../../../../Shared/Models';
 
-type IncomingMessage = ChatMessage & { tempId?: string };
+type IncomingMessage = ChatMessage & { tempId?: string; isDeleted?: boolean };
 
 const normalizeOutgoingPhone = (chatId: string, phone?: string): string => {
   const rawChatId = (chatId || '').trim();
@@ -534,6 +534,10 @@ function ChatPageInner() {
     setMessages(prev => {
       const index = prev.findIndex((msg) => msg.id === updatedMessage.id);
       if (index === -1) return prev;
+
+      if (updatedMessage.isDeleted) {
+        return normalizeMessages(prev.filter((msg) => msg.id !== updatedMessage.id));
+      }
 
       const next = [...prev];
       next[index] = mergeMessage(next[index], updatedMessage);

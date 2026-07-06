@@ -1,4 +1,6 @@
 'use client';
+import type { ChatMessage } from '../../../../Shared/Models';
+
 const baseApiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
 const apiUrl = baseApiUrl + '/api/chat/api';
 export default function Chat(token: string) {
@@ -899,15 +901,23 @@ export default function Chat(token: string) {
     }
   }
 
-  async function EditMessage(messageId: string, newMessage: string) {
+  async function EditMessage(msg: ChatMessage, newMessage: string) {
     try {
+      const messageId = msg.id;
       const response = await fetch(apiUrl + `/EditMessage/${messageId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ newMessage })
+        body: JSON.stringify({
+          ...msg,
+          message: newMessage,
+          newMessage,
+          Id: messageId,
+          Body: newMessage,
+          Phone: msg.contactId || msg.chatId
+        })
       });
 
       if (response.ok) {
@@ -992,14 +1002,20 @@ export default function Chat(token: string) {
     }
   }
 
-  async function DeleteMessage(messageId: string) {
+  async function DeleteMessage(msg: ChatMessage) {
     try {
+      const messageId = msg.id;
       const response = await fetch(apiUrl + `/DeleteMessage/${messageId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({
+          ...msg,
+          Id: messageId,
+          Phone: msg.contactId || msg.chatId
+        })
       });
 
       if (response.ok) {
@@ -1164,7 +1180,8 @@ export default function Chat(token: string) {
 
   async function CreateNewChat(contactId: string, userId: string) {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/CreateNewChat`, {
+      const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/api/CreateNewChat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -503,7 +503,8 @@ export const ChatSidebarOptimized: React.FC<ChatSidebarOptimizedProps> = ({
         setShowAssignModal(true);
         setIsLoadingUsers(true);
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/'}api/user-management`, {
+            const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
+            const response = await fetch(`${baseUrl}/api/user-management`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (response.ok) {

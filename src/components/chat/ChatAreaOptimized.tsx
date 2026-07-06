@@ -61,7 +61,7 @@ interface ChatAreaProps {
     messages: ChatMessage[];
     onSendMessage: (content: string, replyMessage?: ChatMessage) => void;
     onNewMessage?: (message: ChatMessage) => void;
-    onMessageUpdate?: (message: ChatMessage & { tempId?: string }) => void;
+    onMessageUpdate?: (message: ChatMessage & { tempId?: string; isDeleted?: boolean }) => void;
     conversations?: ChatModel[];
     onLoadMoreMessages?: () => Promise<boolean>;
     onClose?: () => void;
@@ -594,12 +594,37 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
                         toggleFavorite={toggleFavorite}
                         onForward={handleForward}
                         onDelete={(msg) => {
-                            // TODO: Implement delete
-                            console.log('Delete message:', msg.id);
+                            chatRouter.DeleteMessage(msg)
+                                .then(() => {
+                                    onMessageUpdate?.({
+                                        ...msg,
+                                        isDeleted: true,
+                                        message: ''
+                                    });
+                                    toast.success('Message deleted');
+                                })
+                                .catch((error) => {
+                                    console.error('Error deleting message:', error);
+                                    toast.error('Failed to delete message');
+                                });
                         }}
                         onEdit={(msg, newText) => {
-                            // TODO: Implement edit
-                            console.log('Edit message:', msg.id, newText);
+                            chatRouter.EditMessage(msg, newText)
+                                .then((response) => {
+                                    const updated = response?.editedMessage;
+                                    onMessageUpdate?.({
+                                        ...msg,
+                                        ...updated,
+                                        id: updated?.id || msg.id,
+                                        message: newText,
+                                        isEdit: true
+                                    });
+                                    toast.success('Message edited');
+                                })
+                                .catch((error) => {
+                                    console.error('Error editing message:', error);
+                                    toast.error('Failed to edit message');
+                                });
                         }}
                         onAddNote={(msg, note) => {
                             chatRouter.AddNoteToMessage(msg.id, note)
