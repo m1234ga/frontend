@@ -594,7 +594,8 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
                         toggleFavorite={toggleFavorite}
                         onForward={handleForward}
                         onDelete={(msg) => {
-                            chatRouter.DeleteMessage(msg)
+                            if (!msg.isFromMe) return;
+                            chatRouter.DeleteMessage(msg, selectedConversation ?? undefined)
                                 .then(() => {
                                     onMessageUpdate?.({
                                         ...msg,
@@ -609,7 +610,8 @@ export const ChatAreaOptimized: React.FC<ChatAreaProps> = ({
                                 });
                         }}
                         onEdit={(msg, newText) => {
-                            chatRouter.EditMessage(msg, newText)
+                            if (!msg.isFromMe) return;
+                            chatRouter.EditMessage(msg, newText, selectedConversation ?? undefined)
                                 .then((response) => {
                                     const updated = response?.editedMessage;
                                     onMessageUpdate?.({

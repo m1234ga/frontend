@@ -1,5 +1,5 @@
 'use client';
-import type { ChatMessage } from '../../../../Shared/Models';
+import type { ChatMessage, Chat } from '../../../../Shared/Models';
 
 const baseApiUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/').replace(/\/$/, '');
 const apiUrl = baseApiUrl + '/api/chat/api';
@@ -901,7 +901,8 @@ export default function Chat(token: string) {
     }
   }
 
-  async function EditMessage(msg: ChatMessage, newMessage: string) {
+  async function EditMessage(msg: ChatMessage, newMessage: string, selectedConv?: Pick<Chat, 'id' | 'phone'>) {
+    if (!msg.isFromMe) return;
     try {
       const messageId = msg.id;
       const response = await fetch(apiUrl + `/EditMessage/${messageId}`, {
@@ -911,12 +912,11 @@ export default function Chat(token: string) {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          ...msg,
-          message: newMessage,
-          newMessage,
           Id: messageId,
           Body: newMessage,
-          Phone: msg.contactId || msg.chatId
+          newMessage,
+          chatId: selectedConv?.id || msg.chatId,
+          Phone: selectedConv?.phone || msg.chatId,
         })
       });
 
@@ -1002,7 +1002,8 @@ export default function Chat(token: string) {
     }
   }
 
-  async function DeleteMessage(msg: ChatMessage) {
+  async function DeleteMessage(msg: ChatMessage, selectedConv?: Pick<Chat, 'id' | 'phone'>) {
+    if (!msg.isFromMe) return;
     try {
       const messageId = msg.id;
       const response = await fetch(apiUrl + `/DeleteMessage/${messageId}`, {
@@ -1012,9 +1013,9 @@ export default function Chat(token: string) {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          ...msg,
           Id: messageId,
-          Phone: msg.contactId || msg.chatId
+          chatId: selectedConv?.id || msg.chatId,
+          Phone: selectedConv?.phone || msg.chatId,
         })
       });
 
